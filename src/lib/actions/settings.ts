@@ -34,19 +34,11 @@ export async function updateUserSettings(formData: FormData) {
 
   const senderEmail = formData.get("sender_email");
   const senderName = formData.get("sender_name");
-  const resendApiKey = formData.get("resend_api_key");
-  const apolloApiKey = formData.get("apollo_api_key");
   const autoSend = formData.get("auto_send_enabled");
   const reviewBeforeSend = formData.get("review_before_send");
 
   if (senderEmail !== null) updates.sender_email = senderEmail;
   if (senderName !== null) updates.sender_name = senderName;
-  if (resendApiKey !== null && resendApiKey !== "") {
-    updates.resend_api_key = resendApiKey;
-  }
-  if (apolloApiKey !== null && apolloApiKey !== "") {
-    updates.apollo_api_key = apolloApiKey;
-  }
   updates.auto_send_enabled = autoSend === "on";
   updates.review_before_send = reviewBeforeSend === "on";
 

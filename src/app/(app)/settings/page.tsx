@@ -21,7 +21,7 @@ export default async function AccountSettingsPage() {
           Account Settings
         </h1>
         <p className="text-sm text-muted-foreground">
-          Configure your API keys and outreach preferences.
+          Configure your email and outreach preferences.
         </p>
       </div>
 
@@ -52,39 +52,6 @@ export default async function AccountSettingsPage() {
                   type="email"
                   defaultValue={settings?.sender_email ?? ""}
                   placeholder="you@yourdomain.com"
-                />
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>API Keys</CardTitle>
-              <CardDescription>
-                These are stored encrypted and never shown again after saving.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4">
-              <div className="grid gap-2">
-                <Label htmlFor="resend_api_key">Resend API Key</Label>
-                <Input
-                  id="resend_api_key"
-                  name="resend_api_key"
-                  type="password"
-                  placeholder={
-                    settings?.resend_api_key ? "********" : "re_..."
-                  }
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="apollo_api_key">Apollo API Key</Label>
-                <Input
-                  id="apollo_api_key"
-                  name="apollo_api_key"
-                  type="password"
-                  placeholder={
-                    settings?.apollo_api_key ? "********" : "Enter your key"
-                  }
                 />
               </div>
             </CardContent>
