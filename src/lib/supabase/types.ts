@@ -11,7 +11,7 @@ export type MeetingPlatform = "zoom" | "google_meet";
 export type InterviewStatus = "scheduled" | "live" | "completed";
 export type ChatRole = "user" | "assistant";
 
-export interface Project {
+export type Project = {
   id: string;
   user_id: string;
   name: string;
@@ -21,9 +21,9 @@ export interface Project {
   prototype_repo_url: string | null;
   prototype_status: PrototypeStatus;
   created_at: string;
-}
+};
 
-export interface Contact {
+export type Contact = {
   id: string;
   project_id: string;
   source: ContactSource;
@@ -43,9 +43,9 @@ export interface Contact {
   email_draft: string | null;
   email_sent_at: string | null;
   apollo_data: Record<string, unknown> | null;
-}
+};
 
-export interface Interview {
+export type Interview = {
   id: string;
   project_id: string;
   contact_id: string | null;
@@ -56,9 +56,9 @@ export interface Interview {
   transcript: Array<{ speaker: string; text: string; timestamp: number }>;
   suggested_questions: string[];
   created_at: string;
-}
+};
 
-export interface SynthesisDocument {
+export type SynthesisDocument = {
   id: string;
   project_id: string;
   content: Record<string, unknown>;
@@ -73,18 +73,18 @@ export interface SynthesisDocument {
   interview_count: number;
   unique_pattern_count: number;
   updated_at: string;
-}
+};
 
-export interface ChatMessage {
+export type ChatMessage = {
   id: string;
   project_id: string;
   role: ChatRole;
   content: string;
   references: Array<Record<string, unknown>>;
   created_at: string;
-}
+};
 
-export interface UserSettings {
+export type UserSettings = {
   id: string;
   user_id: string;
   sender_email: string;
@@ -93,41 +93,56 @@ export interface UserSettings {
   apollo_api_key: string;
   auto_send_enabled: boolean;
   review_before_send: boolean;
-}
+};
 
-export interface Database {
+export type Database = {
   public: {
     Tables: {
       projects: {
         Row: Project;
-        Insert: Omit<Project, "id" | "created_at">;
+        Insert: Omit<Project, "id" | "created_at" | "prototype_url" | "prototype_repo_url"> & {
+          prototype_url?: string | null;
+          prototype_repo_url?: string | null;
+        };
         Update: Partial<Omit<Project, "id">>;
+        Relationships: [];
       };
       contacts: {
         Row: Contact;
         Insert: Omit<Contact, "id">;
         Update: Partial<Omit<Contact, "id">>;
+        Relationships: [];
       };
       interviews: {
         Row: Interview;
         Insert: Omit<Interview, "id" | "created_at">;
         Update: Partial<Omit<Interview, "id">>;
+        Relationships: [];
       };
       synthesis_documents: {
         Row: SynthesisDocument;
         Insert: Omit<SynthesisDocument, "id" | "updated_at">;
         Update: Partial<Omit<SynthesisDocument, "id">>;
+        Relationships: [];
       };
       chat_messages: {
         Row: ChatMessage;
         Insert: Omit<ChatMessage, "id" | "created_at">;
         Update: Partial<Omit<ChatMessage, "id">>;
+        Relationships: [];
       };
       user_settings: {
         Row: UserSettings;
         Insert: Omit<UserSettings, "id">;
         Update: Partial<Omit<UserSettings, "id">>;
+        Relationships: [];
       };
     };
+    Views: {
+      [_ in never]: never;
+    };
+    Functions: {
+      [_ in never]: never;
+    };
   };
-}
+};
