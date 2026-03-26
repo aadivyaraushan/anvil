@@ -71,7 +71,7 @@ export default async function ProjectPage({
             <CardContent>
               <div className="space-y-3 text-sm">
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">
+                  <Badge variant="default">
                     {project.prototype_status}
                   </Badge>
                   <span className="text-muted-foreground">
@@ -89,12 +89,12 @@ export default async function ProjectPage({
         </div>
       ) : (
         /* Phase 2: Three-column workspace */
-        <div className="grid flex-1 grid-cols-3 divide-x overflow-hidden">
+        <div className="grid flex-1 grid-cols-3 divide-x divide-[#1a1a1e] overflow-hidden">
           {/* Discovery Column */}
           <div className="flex flex-col overflow-auto p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Discovery</h2>
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
                 Agent 1
               </Badge>
             </div>
@@ -107,7 +107,7 @@ export default async function ProjectPage({
           <div className="flex flex-col overflow-auto p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Interviews</h2>
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
                 Agent 2
               </Badge>
             </div>
@@ -120,7 +120,7 @@ export default async function ProjectPage({
           <div className="flex flex-col overflow-auto p-4">
             <div className="mb-3 flex items-center justify-between">
               <h2 className="text-sm font-semibold">Synthesis</h2>
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
                 Agent 3
               </Badge>
             </div>
@@ -132,7 +132,7 @@ export default async function ProjectPage({
       )}
 
       {/* Activity Feed */}
-      <div className="border-t px-6 py-3">
+      <div className="border-t bg-popover px-6 py-3">
         <p className="text-xs text-muted-foreground">
           Activity feed will show real-time events from all agents.
         </p>

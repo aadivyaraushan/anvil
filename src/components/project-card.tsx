@@ -15,14 +15,17 @@ const statusLabels: Record<string, string> = {
   failed: "Prototype failed",
 };
 
+const activeStatuses = new Set(["active", "generating"]);
+
 export function ProjectCard({ project }: { project: Project }) {
+  const isActive = activeStatuses.has(project.prototype_status);
   return (
     <Link href={`/project/${project.id}`}>
-      <Card className="transition-colors hover:bg-accent/50">
+      <Card className="transition-colors hover:bg-accent-foreground/[0.08] hover:border-accent-foreground/20">
         <CardHeader>
           <div className="flex items-center justify-between">
             <CardTitle className="text-base">{project.name}</CardTitle>
-            <Badge variant="secondary">
+            <Badge variant={isActive ? "default" : "secondary"}>
               {statusLabels[project.prototype_status] ?? project.prototype_status}
             </Badge>
           </div>
