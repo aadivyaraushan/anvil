@@ -102,6 +102,53 @@ vi.mock("resend", () => {
   return { Resend: MockResend };
 });
 
+vi.mock("@/lib/apollo", () => ({
+  searchApollo: vi.fn().mockResolvedValue([
+    {
+      first_name: "Sarah",
+      last_name: "Chen",
+      email: "sarah@finflow.com",
+      title: "CFO",
+      company: "FinFlow",
+      company_website: "https://finflow.com",
+      linkedin_url: "https://linkedin.com/in/sarahchen",
+      industry: "fintech",
+      location: "San Francisco, CA",
+      raw: {},
+    },
+  ]),
+}));
+
+vi.mock("@/lib/supabase/server", () => ({
+  createServerSupabaseClient: vi.fn().mockResolvedValue({
+    from: vi.fn().mockReturnValue({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockResolvedValue({
+          data: [{ id: "contact-1", first_name: "Sarah", last_name: "Chen", email: "sarah@finflow.com", title: "CFO", company: "FinFlow", company_website: "https://finflow.com", linkedin_url: "", industry: "fintech", location: "San Francisco, CA", source: "apollo", project_id: "proj-1", research_brief: null, fit_score: null, fit_status: null, outreach_status: "pending", email_draft: null, email_sent_at: null, apollo_data: {} }],
+          error: null,
+        }),
+      }),
+      update: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    }),
+  }),
+}));
+
+vi.mock("@langchain/anthropic", () => {
+  const mockInvoke = vi.fn().mockResolvedValue({
+    content: JSON.stringify({
+      jobTitles: ["CFO", "VP Finance"],
+      seniorityLevels: ["c_suite", "vp"],
+      keywords: ["fintech"],
+    }),
+  });
+  class MockChatAnthropic {
+    invoke = mockInvoke;
+  }
+  return { ChatAnthropic: MockChatAnthropic };
+});
+
 describe("Resend client", () => {
   it("calls Resend SDK and returns message ID", async () => {
     process.env.RESEND_API_KEY = "test";
@@ -115,5 +162,71 @@ describe("Resend client", () => {
     });
 
     expect(id).toBe("msg_123");
+  });
+});
+
+describe("sourceContacts node", () => {
+  it("inserts contacts into DB and returns updated state", async () => {
+    const { sourceContacts } = await import("@/lib/agents/discovery/nodes");
+
+    const state = {
+      projectId: "proj-1",
+      targetProfile: "CFOs at fintech companies",
+      ideaDescription: "AI reconciliation tool",
+      senderName: "Alice",
+      senderEmail: "alice@example.com",
+      autoSendEnabled: false,
+      contacts: [],
+      currentIndex: 0,
+      errors: [],
+    };
+
+    const result = await sourceContacts(state);
+
+    expect(result.contacts).toHaveLength(1);
+    expect(result.contacts![0].first_name).toBe("Sarah");
+  });
+});
+
+describe("routeNext routing logic", () => {
+  it("returns nextIndex = 1 when currentIndex is 0 and contacts has 2 items", async () => {
+    const { routeNext } = await import("@/lib/agents/discovery/nodes");
+
+    const state = {
+      projectId: "proj-1",
+      targetProfile: "CFOs",
+      ideaDescription: "test",
+      senderName: "Alice",
+      senderEmail: "alice@example.com",
+      autoSendEnabled: false,
+      contacts: [
+        { id: "c1" } as any,
+        { id: "c2" } as any,
+      ],
+      currentIndex: 0,
+      errors: [],
+    };
+
+    const result = await routeNext(state);
+    expect(result.currentIndex).toBe(1);
+  });
+
+  it("returns nextIndex = 2 when all contacts processed", async () => {
+    const { routeNext } = await import("@/lib/agents/discovery/nodes");
+
+    const state = {
+      projectId: "proj-1",
+      targetProfile: "CFOs",
+      ideaDescription: "test",
+      senderName: "Alice",
+      senderEmail: "alice@example.com",
+      autoSendEnabled: false,
+      contacts: [{ id: "c1" } as any, { id: "c2" } as any],
+      currentIndex: 1,
+      errors: [],
+    };
+
+    const result = await routeNext(state);
+    expect(result.currentIndex).toBe(2);
   });
 });
