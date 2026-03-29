@@ -51,3 +51,45 @@ describe("Apollo client", () => {
     expect(contacts[0].company).toBe("FinFlow");
   });
 });
+
+describe("Tavily client", () => {
+  beforeEach(() => {
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  it("returns answer string from Tavily response when answer is present", async () => {
+    const { searchTavily } = await import("@/lib/tavily");
+
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        answer: "FinFlow is a fintech startup focused on SMB lending.",
+        results: [],
+      }),
+    } as Response);
+
+    process.env.TAVILY_API_KEY = "test";
+    const result = await searchTavily("FinFlow company overview");
+    expect(result).toBe("FinFlow is a fintech startup focused on SMB lending.");
+  });
+
+  it("falls back to result content when no answer", async () => {
+    const { searchTavily } = await import("@/lib/tavily");
+
+    vi.mocked(fetch).mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        answer: null,
+        results: [
+          { content: "FinFlow raised Series A." },
+          { content: "CEO is James Park." },
+        ],
+      }),
+    } as Response);
+
+    process.env.TAVILY_API_KEY = "test";
+    const result = await searchTavily("FinFlow news");
+    expect(result).toContain("FinFlow raised Series A.");
+    expect(result).toContain("CEO is James Park.");
+  });
+});
