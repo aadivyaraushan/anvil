@@ -93,3 +93,27 @@ describe("Tavily client", () => {
     expect(result).toContain("CEO is James Park.");
   });
 });
+
+vi.mock("resend", () => {
+  const mockSend = vi.fn().mockResolvedValue({ data: { id: "msg_123" }, error: null });
+  class MockResend {
+    emails = { send: mockSend };
+  }
+  return { Resend: MockResend };
+});
+
+describe("Resend client", () => {
+  it("calls Resend SDK and returns message ID", async () => {
+    process.env.RESEND_API_KEY = "test";
+    const { sendEmail } = await import("@/lib/resend");
+
+    const id = await sendEmail({
+      to: "sarah@finflow.com",
+      from: "Team Anvil <you@yourdomain.com>",
+      subject: "Quick question about SMB lending",
+      text: "Hi Sarah, I noticed FinFlow recently...",
+    });
+
+    expect(id).toBe("msg_123");
+  });
+});
