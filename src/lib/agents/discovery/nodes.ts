@@ -85,6 +85,11 @@ export async function sourceContacts(
     location: c.location,
     apollo_data: c.raw,
     outreach_status: "pending" as const,
+    research_brief: null,
+    fit_score: null,
+    fit_status: null,
+    email_draft: null,
+    email_sent_at: null,
   }));
 
   const { data, error } = await supabase
