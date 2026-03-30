@@ -8,8 +8,11 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { DiscoveryColumn } from "@/components/discovery-column";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Contact } from "@/lib/supabase/types";
 
 export default async function ProjectPage({
   params,
@@ -25,6 +28,18 @@ export default async function ProjectPage({
   }
 
   const isSetupPhase = project.prototype_status !== "deployed";
+
+  // Fetch initial contacts for the Discovery column
+  let initialContacts: Contact[] = [];
+  if (!isSetupPhase) {
+    const supabase = await createServerSupabaseClient();
+    const { data } = await supabase
+      .from("contacts")
+      .select("*")
+      .eq("project_id", id)
+      .order("created_at", { ascending: true });
+    initialContacts = (data as Contact[]) ?? [];
+  }
 
   return (
     <div className="flex h-full flex-col">
@@ -91,16 +106,14 @@ export default async function ProjectPage({
         /* Phase 2: Three-column workspace */
         <div className="grid flex-1 grid-cols-3 divide-x divide-[#1a1a1e] overflow-hidden">
           {/* Discovery Column */}
-          <div className="flex flex-col overflow-auto p-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b px-4 py-2">
               <h2 className="text-sm font-semibold">Discovery</h2>
               <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
                 Agent 1
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Contact sourcing, research, and outreach will appear here.
-            </p>
+            <DiscoveryColumn project={project} initialContacts={initialContacts} />
           </div>
 
           {/* Interviews Column */}
