@@ -9,10 +9,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { DiscoveryColumn } from "@/components/discovery-column";
+import { InterviewColumn } from "@/components/interview-column";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Contact } from "@/lib/supabase/types";
+import type { Interview } from "@/lib/supabase/types";
 
 export default async function ProjectPage({
   params,
@@ -31,6 +33,7 @@ export default async function ProjectPage({
 
   // Fetch initial contacts for the Discovery column
   let initialContacts: Contact[] = [];
+  let initialInterviews: Interview[] = [];
   if (!isSetupPhase) {
     const supabase = await createServerSupabaseClient();
     const { data } = await supabase
@@ -39,6 +42,13 @@ export default async function ProjectPage({
       .eq("project_id", id)
       .order("created_at", { ascending: true });
     initialContacts = (data as Contact[]) ?? [];
+
+    const { data: interviewData } = await supabase
+      .from("interviews")
+      .select("*")
+      .eq("project_id", id)
+      .order("scheduled_at", { ascending: false });
+    initialInterviews = (interviewData as Interview[]) ?? [];
   }
 
   return (
@@ -117,16 +127,14 @@ export default async function ProjectPage({
           </div>
 
           {/* Interviews Column */}
-          <div className="flex flex-col overflow-auto p-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b px-4 py-2">
               <h2 className="text-sm font-semibold">Interviews</h2>
               <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
                 Agent 2
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Live interviews and copilot suggestions will appear here.
-            </p>
+            <InterviewColumn projectId={id} initialInterviews={initialInterviews} />
           </div>
 
           {/* Synthesis Column */}
