@@ -3,6 +3,8 @@
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { after } from "next/server";
+import { buildPrototypeGraph } from "@/lib/agents/prototype/graph";
 
 export async function getProjects() {
   const supabase = await createServerSupabaseClient();
@@ -46,15 +48,47 @@ export async function createProject(formData: FormData) {
       name,
       idea_description: ideaDescription,
       target_profile: targetProfile,
-      prototype_status: "pending" as const,
+      prototype_status: "generating",
+      prototype_phase: "starting",
     })
     .select()
     .single();
 
   if (error) throw error;
 
+  const projectId = (data as { id: string }).id;
+
+  after(async () => {
+    try {
+      const graph = buildPrototypeGraph();
+      await graph.invoke({
+        projectId,
+        ideaDescription,
+        targetProfile,
+        projectName: name,
+        architectSpec: null,
+        designBrief: null,
+        codeFiles: null,
+        buildErrors: null,
+        reviewFeedback: null,
+        reviewRounds: 0,
+        githubRepoUrl: null,
+        prototypeUrl: null,
+      });
+    } catch (err) {
+      const supabaseInner = await createServerSupabaseClient();
+      await supabaseInner
+        .from("projects")
+        .update({
+          prototype_status: "failed",
+          prototype_phase: `Error: ${String(err).slice(0, 200)}`,
+        })
+        .eq("id", projectId);
+    }
+  });
+
   revalidatePath("/dashboard");
-  redirect(`/project/${data.id}`);
+  redirect(`/project/${projectId}`);
 }
 
 export async function updateProject(id: string, formData: FormData) {
