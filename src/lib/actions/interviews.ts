@@ -2,7 +2,7 @@
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import type { Interview, MeetingPlatform } from "@/lib/supabase/types";
+import type { Interview, InterviewStatus, MeetingPlatform } from "@/lib/supabase/types";
 
 export async function getInterviews(projectId: string): Promise<Interview[]> {
   const supabase = await createServerSupabaseClient();
@@ -58,7 +58,7 @@ export async function createInterview(params: {
 
 export async function updateInterviewStatus(
   id: string,
-  status: "scheduled" | "live" | "completed"
+  status: InterviewStatus
 ): Promise<void> {
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase

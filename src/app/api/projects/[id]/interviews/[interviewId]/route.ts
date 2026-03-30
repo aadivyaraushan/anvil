@@ -17,7 +17,10 @@ export async function GET(
     .eq("id", interviewId)
     .single();
 
-  if (error) return Response.json({ error: error.message }, { status: 404 });
+  if (error) {
+    const status = error.code === "PGRST116" ? 404 : 500;
+    return Response.json({ error: error.message }, { status });
+  }
   return Response.json(data);
 }
 
