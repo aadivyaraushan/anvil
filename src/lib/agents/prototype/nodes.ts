@@ -36,10 +36,13 @@ function parseJson(text: string): unknown {
 
 async function setPhase(projectId: string, phase: string): Promise<void> {
   const supabase = await createServerSupabaseClient();
-  await supabase
+  const { error } = await supabase
     .from("projects")
     .update({ prototype_phase: phase })
     .eq("id", projectId);
+  if (error) {
+    console.error(`[prototype] setPhase(${phase}) failed:`, error.message);
+  }
 }
 
 // ── Node 1: architect ────────────────────────────────────────────────────────
