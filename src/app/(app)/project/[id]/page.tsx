@@ -1,15 +1,9 @@
 import { getProject } from "@/lib/actions/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { DiscoveryColumn } from "@/components/discovery-column";
 import { InterviewColumn } from "@/components/interview-column";
+import { PrototypeBuildStatus } from "@/components/prototype-build-status";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -83,35 +77,12 @@ export default async function ProjectPage({
       </div>
 
       {isSetupPhase ? (
-        /* Phase 1: Prototype building */
-        <div className="flex flex-1 items-center justify-center p-8">
-          <Card className="w-full max-w-xl">
-            <CardHeader>
-              <CardTitle>Building your prototype</CardTitle>
-              <CardDescription>
-                The prototype agents are generating a working MVP of your idea.
-                This runs once before discovery begins.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3 text-sm">
-                <div className="flex items-center gap-2">
-                  <Badge variant="default">
-                    {project.prototype_status}
-                  </Badge>
-                  <span className="text-muted-foreground">
-                    {project.prototype_status === "pending" &&
-                      "Waiting to start..."}
-                    {project.prototype_status === "generating" &&
-                      "Agents are building your prototype..."}
-                    {project.prototype_status === "failed" &&
-                      "Prototype generation failed. Check settings."}
-                  </span>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <PrototypeBuildStatus
+          projectId={id}
+          initialStatus={project.prototype_status}
+          initialPhase={project.prototype_phase}
+          projectName={project.name}
+        />
       ) : (
         /* Phase 2: Three-column workspace */
         <div className="grid flex-1 grid-cols-3 divide-x divide-[#1a1a1e] overflow-hidden">
