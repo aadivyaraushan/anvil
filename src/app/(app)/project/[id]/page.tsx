@@ -9,6 +9,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Contact } from "@/lib/supabase/types";
 import type { Interview } from "@/lib/supabase/types";
+import { SynthesisColumn } from "@/components/synthesis-column";
+import { getSynthesisDocument } from "@/lib/actions/projects";
+import type { SynthesisDocument } from "@/lib/supabase/types";
 
 export default async function ProjectPage({
   params,
@@ -28,6 +31,8 @@ export default async function ProjectPage({
   // Fetch initial contacts for the Discovery column
   let initialContacts: Contact[] = [];
   let initialInterviews: Interview[] = [];
+  let completedInterviewCount = 0;
+  let synthesisDocument: SynthesisDocument | null = null;
   if (!isSetupPhase) {
     const supabase = await createServerSupabaseClient();
     const { data } = await supabase
@@ -43,6 +48,14 @@ export default async function ProjectPage({
       .eq("project_id", id)
       .order("scheduled_at", { ascending: false });
     initialInterviews = (interviewData as Interview[]) ?? [];
+
+    // Count completed interviews for the synthesis column
+    completedInterviewCount = initialInterviews.filter(
+      (i) => i.status === "completed"
+    ).length;
+
+    // Fetch synthesis document (always exists — auto-created by DB trigger)
+    synthesisDocument = await getSynthesisDocument(id) as SynthesisDocument | null;
   }
 
   return (
@@ -109,16 +122,19 @@ export default async function ProjectPage({
           </div>
 
           {/* Synthesis Column */}
-          <div className="flex flex-col overflow-auto p-4">
-            <div className="mb-3 flex items-center justify-between">
+          <div className="flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between border-b px-4 py-2">
               <h2 className="text-sm font-semibold">Synthesis</h2>
               <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
                 Agent 3
               </Badge>
             </div>
-            <p className="text-xs text-muted-foreground">
-              Research synthesis, patterns, and saturation will appear here.
-            </p>
+            <SynthesisColumn
+              projectId={id}
+              initialDocument={synthesisDocument}
+              initialSynthesisStatus={project.synthesis_status}
+              completedInterviewCount={completedInterviewCount}
+            />
           </div>
         </div>
       )}
