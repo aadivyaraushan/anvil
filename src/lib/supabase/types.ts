@@ -10,6 +10,7 @@ export type OutreachStatus =
   | "replied";
 export type MeetingPlatform = "zoom" | "google_meet";
 export type InterviewStatus = "scheduled" | "live" | "completed";
+export type SynthesisStatus = "idle" | "generating" | "complete" | "failed";
 export type ChatRole = "user" | "assistant";
 
 export type Project = {
@@ -24,6 +25,7 @@ export type Project = {
   prototype_phase: string | null;
   discovery_status: DiscoveryStatus;
   discovery_progress: number;
+  synthesis_status: SynthesisStatus;
   created_at: string;
 };
 
@@ -104,12 +106,13 @@ export type Database = {
     Tables: {
       projects: {
         Row: Project;
-        Insert: Omit<Project, "id" | "created_at" | "prototype_url" | "prototype_repo_url" | "prototype_phase" | "discovery_status" | "discovery_progress"> & {
+        Insert: Omit<Project, "id" | "created_at" | "prototype_url" | "prototype_repo_url" | "prototype_phase" | "discovery_status" | "discovery_progress" | "synthesis_status"> & {
           prototype_url?: string | null;
           prototype_repo_url?: string | null;
           prototype_phase?: string | null;
           discovery_status?: DiscoveryStatus;
           discovery_progress?: number;
+          synthesis_status?: SynthesisStatus;
         };
         Update: Partial<Omit<Project, "id">>;
         Relationships: [];
