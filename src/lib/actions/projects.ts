@@ -5,6 +5,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { buildPrototypeGraph } from "@/lib/agents/prototype/graph";
+import { getUserPlan } from "@/lib/billing/subscription";
+import { PLANS, withinLimit } from "@/lib/billing/plans";
 
 export async function getProjects() {
   const supabase = await createServerSupabaseClient();
@@ -36,6 +38,17 @@ export async function createProject(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user) throw new Error("Not authenticated");
+
+  // Enforce project count limit for current plan
+  const plan = await getUserPlan();
+  const limits = PLANS[plan];
+  const { count } = await supabase
+    .from("projects")
+    .select("*", { count: "exact", head: true })
+    .eq("user_id", user.id);
+  if (!withinLimit(count ?? 0, limits.projects)) {
+    redirect("/billing?limit=projects");
+  }
 
   const name = formData.get("name") as string;
   const ideaDescription = formData.get("idea_description") as string;
