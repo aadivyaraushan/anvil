@@ -20,21 +20,30 @@ export default async function globalSetup() {
   // Idempotent: skip creation if user already exists
   const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   const existing = listData?.users.find((u) => u.email === email);
+
+  let userId: string;
   if (existing) {
     console.log(`[global-setup] Test user already exists: ${email}`);
-    return;
+    userId = existing.id;
+  } else {
+    const { data, error } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+    if (error) {
+      throw new Error(`[global-setup] Failed to create test user: ${error.message}`);
+    }
+    console.log(`[global-setup] Created test user: ${data.user.id} (${email})`);
+    userId = data.user.id;
   }
 
-  // email_confirm: true bypasses email verification — no inbox required
-  const { data, error } = await supabase.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-  });
-
-  if (error) {
-    throw new Error(`[global-setup] Failed to create test user: ${error.message}`);
+  // Ensure test user has a subscription row (trigger only fires for NEW users)
+  const { error: subError } = await supabase
+    .from("subscriptions")
+    .upsert({ user_id: userId, plan: "free", status: "active" }, { onConflict: "user_id" });
+  if (subError) {
+    // Non-fatal: table may not exist yet in all environments
+    console.warn(`[global-setup] Could not upsert subscription: ${subError.message}`);
   }
-
-  console.log(`[global-setup] Created test user: ${data.user.id} (${email})`);
 }

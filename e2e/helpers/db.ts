@@ -121,3 +121,23 @@ export async function seedInterview(opts: {
   if (error) throw new Error(`seedInterview failed: ${error.message}`);
   return (data as { id: string }).id;
 }
+
+export async function upsertSubscription(opts: {
+  userId: string;
+  plan?: "free" | "pro" | "max";
+  stripeCustomerId?: string;
+}): Promise<void> {
+  const supabase = adminClient();
+  const { error } = await supabase
+    .from("subscriptions")
+    .upsert(
+      {
+        user_id: opts.userId,
+        plan: opts.plan ?? "free",
+        status: "active",
+        stripe_customer_id: opts.stripeCustomerId ?? null,
+      },
+      { onConflict: "user_id" }
+    );
+  if (error) throw new Error(`upsertSubscription failed: ${error.message}`);
+}

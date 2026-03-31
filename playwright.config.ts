@@ -34,14 +34,14 @@ export default defineConfig({
     // Phase 2: unauthenticated redirect tests (no storageState)
     {
       name: "auth-tests",
-      testMatch: /auth\.spec\.ts/,
+      testMatch: /auth\.spec\.ts|pricing\.spec\.ts/,
       use: { ...devices["Desktop Chrome"] },
     },
 
     // Phase 3: authenticated tests (storageState from phase 1)
     {
       name: "authenticated",
-      testMatch: /dashboard\.spec\.ts|workspace\.spec\.ts/,
+      testMatch: /dashboard\.spec\.ts|workspace\.spec\.ts|billing\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/user.json",
