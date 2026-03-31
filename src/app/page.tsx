@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
+import { PricingSection } from "@/components/pricing-section";
 
 export default function LandingPage() {
   return (
@@ -40,9 +41,9 @@ export default function LandingPage() {
           <Link href="/signup">
             <Button size="lg">Get started</Button>
           </Link>
-          <a href="#how-it-works">
+          <a href="#pricing">
             <Button variant="outline" size="lg">
-              See how it works
+              See pricing
             </Button>
           </a>
         </div>
@@ -238,6 +239,9 @@ export default function LandingPage() {
           ))}
         </div>
       </section>
+
+      {/* Pricing */}
+      <PricingSection />
 
       {/* Footer */}
       <footer className="border-t border-border px-6 py-4 text-center text-xs text-[#3f3f46]">
