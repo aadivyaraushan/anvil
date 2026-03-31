@@ -55,12 +55,14 @@ test.describe("workspace — build phase", () => {
   test("shows retry button when prototype_status is failed", async ({
     page,
   }) => {
+    // Re-seed with failed status for this test (the beforeEach seeded "generating")
     await cleanupProjectsForUser(testUserId);
     projectId = await seedProject({
       userId: testUserId,
       name: "Failed Build Project",
       prototypeStatus: "failed",
     });
+    // afterEach will clean up using the updated projectId
 
     await page.route(`**/api/projects/${projectId}/prototype`, (route) => {
       route.fulfill({
@@ -106,7 +108,7 @@ test.describe("workspace — deployed phase (three-column grid)", () => {
     page,
   }) => {
     await page.goto(`/project/${projectId}`);
-    const runBtn = page.getByRole("button", { name: "Run Synthesis" });
+    const runBtn = page.getByRole("button", { name: /Synthesis/ });
     await expect(runBtn).toBeVisible();
     await expect(runBtn).toBeDisabled();
     await expect(
@@ -134,7 +136,7 @@ test.describe("workspace — deployed phase (three-column grid)", () => {
 
     await page.goto(`/project/${projectId}`);
     await expect(
-      page.getByRole("button", { name: "Run Synthesis" })
+      page.getByRole("button", { name: /Synthesis/ })
     ).toBeEnabled({ timeout: 10_000 });
     await expect(
       page.getByText("Complete an interview first")
@@ -150,7 +152,7 @@ test.describe("workspace — deployed phase (three-column grid)", () => {
 
   test("Settings link navigates to settings page", async ({ page }) => {
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("main").getByRole("link", { name: "Settings" }).click();
     await page.waitForURL(`/project/${projectId}/settings`);
     await expect(page).toHaveURL(`/project/${projectId}/settings`);
   });

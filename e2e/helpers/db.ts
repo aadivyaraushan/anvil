@@ -57,7 +57,9 @@ export async function seedProject(opts: {
         opts.ideaDescription ?? "A test idea for E2E testing.",
       target_profile: opts.targetProfile ?? "QA engineers",
       prototype_status: opts.prototypeStatus ?? "deployed",
-      synthesis_status: opts.synthesisStatus ?? "idle",
+      // Note: prototype_phase and synthesis_status columns require migrations 003/004
+      // which may not be applied in all environments. Omit them from insert;
+      // PostgREST returns only the columns that exist.
     })
     .select("id")
     .single();
