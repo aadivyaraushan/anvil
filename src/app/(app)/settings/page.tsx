@@ -64,29 +64,17 @@ export default async function AccountSettingsPage() {
                 Control how outreach emails are sent.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Auto-send emails</Label>
                   <p className="text-xs text-muted-foreground">
-                    Automatically send emails that pass quality checks.
+                    When off, you review and approve each email before it sends.
                   </p>
                 </div>
                 <Switch
                   name="auto_send_enabled"
                   defaultChecked={settings?.auto_send_enabled ?? false}
-                />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label>Review before sending</Label>
-                  <p className="text-xs text-muted-foreground">
-                    Require manual approval before each email is sent.
-                  </p>
-                </div>
-                <Switch
-                  name="review_before_send"
-                  defaultChecked={settings?.review_before_send ?? true}
                 />
               </div>
             </CardContent>

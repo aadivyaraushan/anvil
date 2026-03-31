@@ -34,13 +34,12 @@ export async function updateUserSettings(formData: FormData) {
 
   const senderEmail = formData.get("sender_email");
   const senderName = formData.get("sender_name");
-  const autoSend = formData.get("auto_send_enabled");
-  const reviewBeforeSend = formData.get("review_before_send");
+  const autoSend = formData.get("auto_send_enabled") === "on";
 
   if (senderEmail !== null) updates.sender_email = senderEmail;
   if (senderName !== null) updates.sender_name = senderName;
-  updates.auto_send_enabled = autoSend === "on";
-  updates.review_before_send = reviewBeforeSend === "on";
+  updates.auto_send_enabled = autoSend;
+  updates.review_before_send = !autoSend;
 
   const { error } = await supabase
     .from("user_settings")
