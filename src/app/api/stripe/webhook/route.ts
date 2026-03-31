@@ -37,6 +37,7 @@ export async function POST(req: NextRequest) {
     if (session.mode !== "subscription") return NextResponse.json({ received: true });
 
     const userId = session.metadata?.user_id;
+    if (!userId) return NextResponse.json({ received: true });
     const customerId = session.customer as string;
     const subscriptionId = session.subscription as string;
 
