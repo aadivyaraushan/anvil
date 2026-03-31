@@ -101,6 +101,22 @@ export type UserSettings = {
   review_before_send: boolean;
 };
 
+export type SubscriptionPlan = "free" | "pro" | "max";
+export type SubscriptionStatus = "active" | "trialing" | "past_due" | "canceled" | "incomplete";
+
+export type Subscription = {
+  id: string;
+  user_id: string;
+  stripe_customer_id: string | null;
+  stripe_subscription_id: string | null;
+  stripe_price_id: string | null;
+  plan: SubscriptionPlan;
+  status: SubscriptionStatus;
+  current_period_end: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Database = {
   public: {
     Tables: {
@@ -145,6 +161,17 @@ export type Database = {
         Row: UserSettings;
         Insert: Omit<UserSettings, "id">;
         Update: Partial<Omit<UserSettings, "id">>;
+        Relationships: [];
+      };
+      subscriptions: {
+        Row: Subscription;
+        Insert: Omit<Subscription, "id" | "created_at" | "updated_at"> & {
+          stripe_customer_id?: string | null;
+          stripe_subscription_id?: string | null;
+          stripe_price_id?: string | null;
+          current_period_end?: string | null;
+        };
+        Update: Partial<Omit<Subscription, "id" | "created_at">>;
         Relationships: [];
       };
     };
