@@ -18,7 +18,7 @@ export default async function globalSetup() {
   });
 
   // Idempotent: skip creation if user already exists
-  const { data: listData } = await supabase.auth.admin.listUsers();
+  const { data: listData } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   const existing = listData?.users.find((u) => u.email === email);
   if (existing) {
     console.log(`[global-setup] Test user already exists: ${email}`);

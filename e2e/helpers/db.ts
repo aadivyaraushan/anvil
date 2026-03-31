@@ -19,9 +19,8 @@ function adminClient(): SupabaseClient {
 
 export async function getUserIdByEmail(email: string): Promise<string | null> {
   const supabase = adminClient();
-  const { data, error } = await supabase.auth.admin.listUsers();
-  if (error) throw new Error(`listUsers failed: ${error.message}`);
-  return data.users.find((u) => u.email === email)?.id ?? null;
+  const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
+  return data?.users.find((u) => u.email === email)?.id ?? null;
 }
 
 export async function deleteUser(userId: string): Promise<void> {

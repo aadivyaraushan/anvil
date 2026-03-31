@@ -49,7 +49,6 @@ export async function createProject(formData: FormData) {
       idea_description: ideaDescription,
       target_profile: targetProfile,
       prototype_status: "generating",
-      prototype_phase: "starting",
     })
     .select()
     .single();
