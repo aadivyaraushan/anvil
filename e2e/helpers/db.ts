@@ -57,8 +57,6 @@ export async function seedProject(opts: {
         opts.ideaDescription ?? "A test idea for E2E testing.",
       target_profile: opts.targetProfile ?? "QA engineers",
       prototype_status: opts.prototypeStatus ?? "deployed",
-      prototype_phase:
-        opts.prototypeStatus === "deployed" ? "deployed" : "starting",
       synthesis_status: opts.synthesisStatus ?? "idle",
     })
     .select("id")
