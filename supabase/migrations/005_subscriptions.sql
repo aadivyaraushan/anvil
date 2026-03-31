@@ -27,13 +27,16 @@ create policy "Users can view own subscription"
 
 -- Auto-create free subscription on user signup
 create or replace function public.handle_new_user_subscription()
-returns trigger as $$
+returns trigger
+language plpgsql
+security definer
+as $$
 begin
   insert into public.subscriptions (user_id, plan, status)
   values (new.id, 'free', 'active');
   return new;
 end;
-$$ language plpgsql security definer;
+$$;
 
 create trigger on_auth_user_created_subscription
   after insert on auth.users
@@ -41,12 +44,14 @@ create trigger on_auth_user_created_subscription
 
 -- Auto-update updated_at
 create or replace function public.update_subscriptions_updated_at()
-returns trigger as $$
+returns trigger
+language plpgsql
+as $$
 begin
   new.updated_at = now();
   return new;
 end;
-$$ language plpgsql;
+$$;
 
 create trigger subscriptions_updated_at
   before update on subscriptions
