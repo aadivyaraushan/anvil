@@ -113,3 +113,13 @@ export async function updateProject(id: string, formData: FormData) {
   revalidatePath(`/project/${id}`);
   revalidatePath(`/project/${id}/settings`);
 }
+
+export async function getSynthesisDocument(projectId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("synthesis_documents")
+    .select("*")
+    .eq("project_id", projectId)
+    .single();
+  return data ?? null;
+}
