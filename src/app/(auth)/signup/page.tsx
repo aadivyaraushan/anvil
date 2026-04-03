@@ -70,7 +70,7 @@ export default function SignupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSignup} className="grid gap-4">
+          <form onSubmit={handleSignup} className="grid gap-4" autoComplete="on">
             <div className="grid gap-2">
               <Label htmlFor="email">Email</Label>
               <Input
@@ -80,6 +80,7 @@ export default function SignupPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+                autoComplete="email"
               />
             </div>
             <div className="grid gap-2">
@@ -92,6 +93,7 @@ export default function SignupPage() {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={6}
+                autoComplete="new-password"
               />
             </div>
             {error && (
