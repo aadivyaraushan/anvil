@@ -1,7 +1,8 @@
-import { ChatAnthropic } from "@langchain/anthropic";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { buildInSandbox } from "@/lib/sandbox";
 import { createGitHubRepo, pushFilesToGitHub } from "@/lib/github";
+import { updatePrototypeProject } from "@/lib/prototype-status";
+import { deployFilesToVercel } from "@/lib/vercel";
+import { createLlm } from "@/lib/llm";
 import {
   buildArchitectPrompt,
   buildUxDesignerPrompt,
@@ -10,14 +11,11 @@ import {
 } from "./prompts";
 import type { PrototypeState } from "./state";
 
-let _llm: ChatAnthropic | null = null;
+let _llm: ReturnType<typeof createLlm> | null = null;
 
-function getLlm(): ChatAnthropic {
+function getLlm() {
   if (!_llm) {
-    _llm = new ChatAnthropic({
-      model: "claude-sonnet-4-6",
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    _llm = createLlm();
   }
   return _llm;
 }
@@ -35,13 +33,16 @@ function parseJson(text: string): unknown {
 }
 
 async function setPhase(projectId: string, phase: string): Promise<void> {
-  const supabase = await createServerSupabaseClient();
-  const { error } = await supabase
-    .from("projects")
-    .update({ prototype_phase: phase })
-    .eq("id", projectId);
-  if (error) {
-    console.error(`[prototype] setPhase(${phase}) failed:`, error.message);
+  try {
+    await updatePrototypeProject(projectId, { prototype_phase: phase });
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : typeof error === "string"
+        ? error
+        : "Unknown error";
+    console.error(`[prototype] setPhase(${phase}) failed:`, message);
   }
 }
 
@@ -173,6 +174,16 @@ export async function deploy(
 ): Promise<Partial<PrototypeState>> {
   await setPhase(state.projectId, "deploying");
 
+  if (state.buildErrors) {
+    throw new Error(`Prototype still has build errors:\n${state.buildErrors}`);
+  }
+
+  if (state.reviewFeedback) {
+    throw new Error(
+      `Prototype still has unresolved review feedback:\n${state.reviewFeedback}`
+    );
+  }
+
   // Create GitHub repo and push code
   const repoName = `anvil-prototype-${state.projectName
     .toLowerCase()
@@ -182,21 +193,34 @@ export async function deploy(
 
   const { repoUrl, owner } = await createGitHubRepo(repoName);
   await pushFilesToGitHub(owner, repoName, state.codeFiles!);
+  const { deploymentUrl } = await deployFilesToVercel(repoName, state.codeFiles!);
 
   // Mark project as deployed in Supabase
-  const supabase = await createServerSupabaseClient();
-  await supabase
-    .from("projects")
-    .update({
-      prototype_status: "deployed",
-      prototype_repo_url: repoUrl,
-      prototype_url: repoUrl, // GitHub URL as the prototype URL (Vercel deploy is separate)
-      prototype_phase: "deployed",
-    })
-    .eq("id", state.projectId);
+  await updatePrototypeProject(state.projectId, {
+    prototype_status: "deployed",
+    prototype_repo_url: repoUrl,
+    prototype_url: deploymentUrl,
+    prototype_phase: "deployed",
+  });
 
   return {
     githubRepoUrl: repoUrl,
-    prototypeUrl: repoUrl,
+    prototypeUrl: deploymentUrl,
   };
+}
+
+export async function failBuild(state: PrototypeState): Promise<never> {
+  const message =
+    state.buildErrors ??
+    "Prototype generation exhausted its retries without producing a successful build.";
+  await setPhase(state.projectId, `Error: ${message.slice(0, 180)}`);
+  throw new Error(message);
+}
+
+export async function failReview(state: PrototypeState): Promise<never> {
+  const message =
+    state.reviewFeedback ??
+    "Prototype generation exhausted its retries without satisfying the review step.";
+  await setPhase(state.projectId, `Error: ${message.slice(0, 180)}`);
+  throw new Error(message);
 }

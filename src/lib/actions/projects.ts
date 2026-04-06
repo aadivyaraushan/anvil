@@ -7,6 +7,7 @@ import { after } from "next/server";
 import { buildPrototypeGraph } from "@/lib/agents/prototype/graph";
 import { getUserPlan } from "@/lib/billing/subscription";
 import { PLANS, withinLimit } from "@/lib/billing/plans";
+import { updatePrototypeProject } from "@/lib/prototype-status";
 
 export async function getProjects() {
   const supabase = await createServerSupabaseClient();
@@ -88,14 +89,10 @@ export async function createProject(formData: FormData) {
         prototypeUrl: null,
       });
     } catch (err) {
-      const supabaseInner = await createServerSupabaseClient();
-      await supabaseInner
-        .from("projects")
-        .update({
-          prototype_status: "failed",
-          prototype_phase: `Error: ${String(err).slice(0, 200)}`,
-        })
-        .eq("id", projectId);
+      await updatePrototypeProject(projectId, {
+        prototype_status: "failed",
+        prototype_phase: `Error: ${String(err).slice(0, 200)}`,
+      });
     }
   });
 

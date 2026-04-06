@@ -135,19 +135,17 @@ vi.mock("@/lib/supabase/server", () => ({
   }),
 }));
 
-vi.mock("@langchain/anthropic", () => {
-  const mockInvoke = vi.fn().mockResolvedValue({
-    content: JSON.stringify({
-      jobTitles: ["CFO", "VP Finance"],
-      seniorityLevels: ["c_suite", "vp"],
-      keywords: ["fintech"],
+vi.mock("@/lib/llm", () => ({
+  createLlm: vi.fn().mockReturnValue({
+    invoke: vi.fn().mockResolvedValue({
+      content: JSON.stringify({
+        jobTitles: ["CFO", "VP Finance"],
+        seniorityLevels: ["c_suite", "vp"],
+        keywords: ["fintech"],
+      }),
     }),
-  });
-  class MockChatAnthropic {
-    invoke = mockInvoke;
-  }
-  return { ChatAnthropic: MockChatAnthropic };
-});
+  }),
+}));
 
 describe("Resend client", () => {
   it("calls Resend SDK and returns message ID", async () => {

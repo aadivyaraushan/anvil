@@ -95,6 +95,7 @@ export default async function ProjectPage({
           initialStatus={project.prototype_status}
           initialPhase={project.prototype_phase}
           projectName={project.name}
+          createdAt={project.created_at}
         />
       ) : (
         /* Phase 2: Three-column workspace */

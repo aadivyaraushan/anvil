@@ -1,15 +1,12 @@
 import { after } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { ChatAnthropic } from "@langchain/anthropic";
 import { buildCopilotPrompt } from "@/lib/agents/copilot/prompts";
+import { createLlm } from "@/lib/llm";
 import type { Interview, Project } from "@/lib/supabase/types";
 
 function getLlm() {
-  return new ChatAnthropic({
-    model: "claude-haiku-4-5-20251001",
-    apiKey: process.env.ANTHROPIC_API_KEY,
-  });
+  return createLlm();
 }
 
 export async function GET(

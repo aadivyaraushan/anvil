@@ -35,6 +35,7 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="generating"
         initialPhase="architect"
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     expect(screen.getByText("Building your prototype")).toBeDefined();
@@ -48,6 +49,7 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="deployed"
         initialPhase="deployed"
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     expect(screen.getByText("Prototype ready")).toBeDefined();
@@ -61,6 +63,7 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="generating"
         initialPhase="developer"
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     // Phase labels should be visible in the progress list
@@ -77,6 +80,7 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="failed"
         initialPhase={null}
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     expect(screen.getByText("Retry")).toBeDefined();
@@ -90,9 +94,24 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="generating"
         initialPhase="architect"
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     expect(screen.queryByText("Retry")).toBeNull();
+  });
+
+  it("shows Restart build button when generating has gone stale", async () => {
+    const { PrototypeBuildStatus } = await import("@/components/prototype-build-status");
+    render(
+      <PrototypeBuildStatus
+        projectId="proj-1"
+        initialStatus="generating"
+        initialPhase={null}
+        projectName="ReconAI"
+        createdAt="2020-01-01T00:00:00.000Z"
+      />
+    );
+    expect(screen.getByText("Restart build")).toBeDefined();
   });
 
   it("shows settings link regardless of status", async () => {
@@ -103,6 +122,7 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="generating"
         initialPhase="architect"
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     expect(screen.getByText("Settings")).toBeDefined();
@@ -114,6 +134,7 @@ describe("PrototypeBuildStatus", () => {
         initialStatus="deployed"
         initialPhase="deployed"
         projectName="ReconAI"
+        createdAt={new Date().toISOString()}
       />
     );
     expect(screen.getByText("Settings")).toBeDefined();

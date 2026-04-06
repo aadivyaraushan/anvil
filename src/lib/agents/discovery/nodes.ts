@@ -1,8 +1,8 @@
-import { ChatAnthropic } from "@langchain/anthropic";
 import { searchApollo } from "@/lib/apollo";
 import { searchTavily } from "@/lib/tavily";
 import { sendEmail } from "@/lib/resend";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createLlm } from "@/lib/llm";
 import {
   buildApolloParamsPrompt,
   buildResearchBriefPrompt,
@@ -13,14 +13,11 @@ import {
 import type { DiscoveryState } from "./state";
 import type { Contact } from "@/lib/supabase/types";
 
-let _llm: ChatAnthropic | null = null;
+let _llm: ReturnType<typeof createLlm> | null = null;
 
-function getLlm(): ChatAnthropic {
+function getLlm() {
   if (!_llm) {
-    _llm = new ChatAnthropic({
-      model: "claude-sonnet-4-6",
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    _llm = createLlm();
   }
   return _llm;
 }

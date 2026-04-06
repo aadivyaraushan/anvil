@@ -2,13 +2,13 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // All vi.mock calls are hoisted — they run before any imports
 
-vi.mock("@langchain/anthropic", () => {
-  const mockInvoke = vi.fn().mockResolvedValue({ content: '{"appName":"TestApp","pages":[],"features":[]}' });
-  class MockChatAnthropic {
-    invoke = mockInvoke;
-  }
-  return { ChatAnthropic: MockChatAnthropic };
-});
+vi.mock("@/lib/llm", () => ({
+  createLlm: vi.fn().mockReturnValue({
+    invoke: vi.fn().mockResolvedValue({
+      content: '{"appName":"TestApp","pages":[],"features":[]}',
+    }),
+  }),
+}));
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn().mockResolvedValue({
@@ -29,6 +29,13 @@ vi.mock("@/lib/github", () => ({
     owner: "user",
   }),
   pushFilesToGitHub: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock("@/lib/vercel", () => ({
+  deployFilesToVercel: vi.fn().mockResolvedValue({
+    deploymentId: "dpl_123",
+    deploymentUrl: "https://prototype-user.vercel.app",
+  }),
 }));
 
 const baseState = {
@@ -72,21 +79,13 @@ describe("developer node", () => {
 
   it("increments reviewRounds when buildErrors and reviewFeedback are null", async () => {
     // developer expects the LLM to return a files array — provide a valid mock response
-    const { ChatAnthropic } = await import("@langchain/anthropic");
-    const instance = new (ChatAnthropic as any)();
-    vi.mocked(instance.invoke).mockResolvedValueOnce({
-      content: '{"files":[{"path":"src/app/page.tsx","content":"export default () => <div/>"}]}',
-    });
-    // Re-mock the module so the new instance is used via the constructor
-    vi.doMock("@langchain/anthropic", () => {
-      const mockInvoke = vi.fn().mockResolvedValue({
-        content: '{"files":[{"path":"src/app/page.tsx","content":"export default () => <div/>"}]}',
-      });
-      class MockChatAnthropic {
-        invoke = mockInvoke;
-      }
-      return { ChatAnthropic: MockChatAnthropic };
-    });
+    vi.doMock("@/lib/llm", () => ({
+      createLlm: vi.fn().mockReturnValue({
+        invoke: vi.fn().mockResolvedValue({
+          content: '{"files":[{"path":"src/app/page.tsx","content":"export default () => <div/>"}]}',
+        }),
+      }),
+    }));
     vi.resetModules();
 
     const { developer } = await import("@/lib/agents/prototype/nodes");
@@ -95,17 +94,13 @@ describe("developer node", () => {
   });
 
   it("calls LLM invoke when buildErrors are present", async () => {
-    vi.doMock("@langchain/anthropic", () => {
-      const mockInvoke = vi.fn().mockResolvedValue({
-        content: '{"files":[{"path":"src/app/page.tsx","content":"export default () => <div/>"}]}',
-      });
-      class MockChatAnthropic {
-        invoke = mockInvoke;
-      }
-      // Attach mockInvoke to class so we can inspect it
-      (MockChatAnthropic as any).__mockInvoke = mockInvoke;
-      return { ChatAnthropic: MockChatAnthropic };
-    });
+    vi.doMock("@/lib/llm", () => ({
+      createLlm: vi.fn().mockReturnValue({
+        invoke: vi.fn().mockResolvedValue({
+          content: '{"files":[{"path":"src/app/page.tsx","content":"export default () => <div/>"}]}',
+        }),
+      }),
+    }));
     vi.resetModules();
 
     const { developer } = await import("@/lib/agents/prototype/nodes");
@@ -124,13 +119,11 @@ describe("reviewer node", () => {
   });
 
   it("returns reviewFeedback: null when LLM responds APPROVED", async () => {
-    vi.doMock("@langchain/anthropic", () => {
-      const mockInvoke = vi.fn().mockResolvedValue({ content: "APPROVED" });
-      class MockChatAnthropic {
-        invoke = mockInvoke;
-      }
-      return { ChatAnthropic: MockChatAnthropic };
-    });
+    vi.doMock("@/lib/llm", () => ({
+      createLlm: vi.fn().mockReturnValue({
+        invoke: vi.fn().mockResolvedValue({ content: "APPROVED" }),
+      }),
+    }));
     vi.resetModules();
 
     const { reviewer } = await import("@/lib/agents/prototype/nodes");
@@ -139,15 +132,13 @@ describe("reviewer node", () => {
   });
 
   it("returns non-null feedback when LLM responds with issues", async () => {
-    vi.doMock("@langchain/anthropic", () => {
-      const mockInvoke = vi.fn().mockResolvedValue({
-        content: "1. Missing dashboard component\n2. Color scheme doesn't match brief",
-      });
-      class MockChatAnthropic {
-        invoke = mockInvoke;
-      }
-      return { ChatAnthropic: MockChatAnthropic };
-    });
+    vi.doMock("@/lib/llm", () => ({
+      createLlm: vi.fn().mockReturnValue({
+        invoke: vi.fn().mockResolvedValue({
+          content: "1. Missing dashboard component\n2. Color scheme doesn't match brief",
+        }),
+      }),
+    }));
     vi.resetModules();
 
     const { reviewer } = await import("@/lib/agents/prototype/nodes");
@@ -204,10 +195,17 @@ describe("deploy node", () => {
       owner: "user",
     });
     const mockPushFilesToGitHub = vi.fn().mockResolvedValue(undefined);
+    const mockDeployFilesToVercel = vi.fn().mockResolvedValue({
+      deploymentId: "dpl_123",
+      deploymentUrl: "https://prototype-user.vercel.app",
+    });
 
     vi.doMock("@/lib/github", () => ({
       createGitHubRepo: mockCreateGitHubRepo,
       pushFilesToGitHub: mockPushFilesToGitHub,
+    }));
+    vi.doMock("@/lib/vercel", () => ({
+      deployFilesToVercel: mockDeployFilesToVercel,
     }));
     vi.doMock("@/lib/supabase/server", () => ({
       createServerSupabaseClient: vi.fn().mockResolvedValue({
@@ -221,10 +219,28 @@ describe("deploy node", () => {
 
     expect(mockCreateGitHubRepo).toHaveBeenCalledOnce();
     expect(mockPushFilesToGitHub).toHaveBeenCalledOnce();
+    expect(mockDeployFilesToVercel).toHaveBeenCalledOnce();
     expect(mockUpdate).toHaveBeenCalledWith(
-      expect.objectContaining({ prototype_status: "deployed" })
+      expect.objectContaining({
+        prototype_status: "deployed",
+        prototype_repo_url: "https://github.com/user/repo",
+        prototype_url: "https://prototype-user.vercel.app",
+      })
     );
     expect(result.githubRepoUrl).toBe("https://github.com/user/repo");
-    expect(result.prototypeUrl).toBe("https://github.com/user/repo");
+    expect(result.prototypeUrl).toBe("https://prototype-user.vercel.app");
+  });
+
+  it("refuses to deploy when build errors are still present", async () => {
+    vi.resetModules();
+
+    const { deploy } = await import("@/lib/agents/prototype/nodes");
+
+    await expect(
+      deploy({
+        ...baseState,
+        buildErrors: "next build failed: Type error",
+      })
+    ).rejects.toThrow("Prototype still has build errors");
   });
 });

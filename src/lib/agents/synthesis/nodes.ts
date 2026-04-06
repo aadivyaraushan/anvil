@@ -1,5 +1,5 @@
-import { ChatAnthropic } from "@langchain/anthropic";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { createLlm } from "@/lib/llm";
 import {
   buildExtractorPrompt,
   buildSynthesizerPrompt,
@@ -12,14 +12,11 @@ import type {
   SynthesisResult,
 } from "./state";
 
-let _llm: ChatAnthropic | null = null;
+let _llm: ReturnType<typeof createLlm> | null = null;
 
-function getLlm(): ChatAnthropic {
+function getLlm() {
   if (!_llm) {
-    _llm = new ChatAnthropic({
-      model: "claude-sonnet-4-6",
-      apiKey: process.env.ANTHROPIC_API_KEY,
-    });
+    _llm = createLlm();
   }
   return _llm;
 }

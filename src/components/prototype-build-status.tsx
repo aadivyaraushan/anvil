@@ -11,7 +11,10 @@ type Props = {
   initialStatus: PrototypeStatus;
   initialPhase: string | null;
   projectName: string;
+  createdAt: string;
 };
+
+const STALE_BUILD_MS = 2 * 60 * 1000;
 
 const PHASE_LABELS: Record<string, string> = {
   starting: "Initializing...",
@@ -20,11 +23,12 @@ const PHASE_LABELS: Record<string, string> = {
   developer: "Developer generating code...",
   building: "Verifying build in sandbox...",
   reviewer: "Reviewer checking quality...",
-  deploying: "Pushing to GitHub...",
+  deploying: "Publishing live prototype...",
   deployed: "Deployed!",
 };
 
 const PHASE_ORDER = [
+  "starting",
   "architect",
   "ux-designer",
   "developer",
@@ -38,6 +42,7 @@ export function PrototypeBuildStatus({
   initialStatus,
   initialPhase,
   projectName,
+  createdAt,
 }: Props) {
   const [status, setStatus] = useState<PrototypeStatus>(initialStatus);
   const [phase, setPhase] = useState<string | null>(initialPhase);
@@ -70,9 +75,19 @@ export function PrototypeBuildStatus({
     };
   }, [projectId]);
 
-  const currentPhaseIndex = PHASE_ORDER.indexOf(phase ?? "");
+  const normalizedPhase =
+    phase && PHASE_ORDER.includes(phase)
+      ? phase
+      : status === "generating"
+      ? "starting"
+      : phase;
+  const currentPhaseIndex = PHASE_ORDER.indexOf(normalizedPhase ?? "");
   const isFailed = status === "failed";
   const isDeployed = status === "deployed";
+  const isStaleGenerating =
+    status === "generating" &&
+    Date.now() - new Date(createdAt).getTime() > STALE_BUILD_MS;
+  const canRetry = isFailed || isStaleGenerating;
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">
@@ -83,7 +98,7 @@ export function PrototypeBuildStatus({
           </h2>
           <p className="text-sm text-muted-foreground">
             {isDeployed
-              ? `${projectName} prototype has been generated and pushed to GitHub.`
+              ? `${projectName} prototype is live and the source has been pushed to GitHub.`
               : `Generating a functional MVP for ${projectName}...`}
           </p>
         </div>
@@ -93,7 +108,7 @@ export function PrototypeBuildStatus({
           <div className="space-y-2">
             {PHASE_ORDER.map((p, i) => {
               const isDone = i < currentPhaseIndex;
-              const isActive = p === phase;
+              const isActive = p === normalizedPhase;
               return (
                 <div
                   key={p}
@@ -126,25 +141,28 @@ export function PrototypeBuildStatus({
             <span className="text-destructive">
               {phase?.startsWith("Error:") ? phase : "Build failed. Check your API keys in settings."}
             </span>
-          ) : phase ? (
+          ) : normalizedPhase ? (
             <span className="text-muted-foreground animate-pulse">
-              {PHASE_LABELS[phase] ?? phase}
+              {PHASE_LABELS[normalizedPhase] ?? normalizedPhase}
             </span>
           ) : null}
         </p>
 
         {/* Actions */}
         <div className="flex gap-2">
-          {isFailed && (
+          {canRetry && (
             <Button
               size="sm"
               onClick={async () => {
-                await fetch(`/api/projects/${projectId}/prototype`, {
+                const url = isStaleGenerating
+                  ? `/api/projects/${projectId}/prototype?force=1`
+                  : `/api/projects/${projectId}/prototype`;
+                await fetch(url, {
                   method: "POST",
                 });
               }}
             >
-              Retry
+              {isStaleGenerating ? "Restart build" : "Retry"}
             </Button>
           )}
           <Link href={`/project/${projectId}/settings`}>

@@ -2,12 +2,14 @@ import { after } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { buildPrototypeGraph } from "@/lib/agents/prototype/graph";
+import { updatePrototypeProject } from "@/lib/prototype-status";
 
 export async function POST(
-  _req: NextRequest,
+  req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   const { id } = await ctx.params;
+  const force = req.nextUrl.searchParams.get("force") === "1";
   const supabase = await createServerSupabaseClient();
 
   const {
@@ -27,15 +29,15 @@ export async function POST(
   }
 
   // Prevent double-triggering if already running
-  if (project.prototype_status === "generating") {
+  if (project.prototype_status === "generating" && !force) {
     return Response.json({ status: "already_running" }, { status: 409 });
   }
 
   // Mark as generating immediately
-  await supabase
-    .from("projects")
-    .update({ prototype_status: "generating", prototype_phase: "starting" })
-    .eq("id", id);
+  await updatePrototypeProject(id, {
+    prototype_status: "generating",
+    prototype_phase: "starting",
+  });
 
   // Run the prototype graph in the background after response
   after(async () => {
@@ -57,14 +59,10 @@ export async function POST(
       });
     } catch (err) {
       // Mark as failed on unrecoverable error
-      const supabaseInner = await createServerSupabaseClient();
-      await supabaseInner
-        .from("projects")
-        .update({
-          prototype_status: "failed",
-          prototype_phase: `Error: ${String(err).slice(0, 200)}`,
-        })
-        .eq("id", id);
+      await updatePrototypeProject(id, {
+        prototype_status: "failed",
+        prototype_phase: `Error: ${String(err).slice(0, 200)}`,
+      });
     }
   });
 
