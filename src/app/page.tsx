@@ -34,8 +34,8 @@ export default function LandingPage() {
           Customer discovery on autopilot
         </h1>
         <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
-          Three AI agents find candidates, assist live interviews, and
-          synthesize insights. One workspace, three parallel workflows.
+          Four AI agents find candidates, assist live interviews, synthesize
+          insights, and ship a prototype. One workspace, end to end.
         </p>
         <div className="mt-8 flex gap-3">
           <Link href="/signup">
@@ -187,6 +187,117 @@ export default function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
+
+      {/* Agent Workflow */}
+      <section className="border-t border-border px-6 py-20">
+        <h2
+          className="text-center text-[28px] font-bold text-foreground"
+          style={{ letterSpacing: "-0.02em" }}
+        >
+          Meet the agents
+        </h2>
+        <p className="mx-auto mt-3 max-w-xl text-center text-[15px] leading-relaxed text-muted-foreground">
+          Four specialised AI agents work in sequence to take you from idea to
+          validated prototype.
+        </p>
+
+        {/* Flow chart */}
+        <div className="mx-auto mt-12 flex max-w-5xl flex-col items-center gap-0 md:flex-row md:items-stretch md:justify-center">
+          {[
+            {
+              number: "01",
+              name: "Discovery",
+              color: "#2563eb",
+              desc: "Finds and qualifies customer interview candidates. Sources contacts, researches backgrounds, scores fit, and sends personalised outreach emails automatically.",
+            },
+            {
+              number: "02",
+              name: "Interview Copilot",
+              color: "#7c3aed",
+              desc: "Joins live calls, transcribes in real-time, and surfaces follow-up questions focused on pain points — so you never miss a key insight mid-conversation.",
+            },
+            {
+              number: "03",
+              name: "Synthesis",
+              color: "#0891b2",
+              desc: "Analyses completed interviews, extracts patterns and pain points, scores research saturation, and keeps a living insight document always up to date.",
+            },
+            {
+              number: "04",
+              name: "Prototype",
+              color: "#059669",
+              desc: "Turns validated insights into a working product. Architects, designs, codes, verifies, and deploys a live prototype to GitHub and Vercel automatically.",
+            },
+          ].map((agent, i, arr) => (
+            <div
+              key={agent.number}
+              className="flex flex-col items-center md:flex-row md:items-stretch"
+              style={{ flex: "1 1 0" }}
+            >
+              {/* Agent card */}
+              <div
+                className="flex w-full flex-col rounded-2xl border border-border bg-card p-5 md:w-auto"
+                style={{ flex: "1 1 0", minWidth: 0 }}
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-[11px] font-bold text-white"
+                    style={{ background: agent.color }}
+                  >
+                    {agent.number}
+                  </span>
+                  <span
+                    className="text-[13px] font-semibold text-foreground"
+                    style={{ letterSpacing: "-0.01em" }}
+                  >
+                    {agent.name}
+                  </span>
+                </div>
+                <p className="mt-3 text-[12px] leading-relaxed text-muted-foreground">
+                  {agent.desc}
+                </p>
+              </div>
+
+              {/* Arrow connector — hidden after last item */}
+              {i < arr.length - 1 && (
+                <div className="flex items-center justify-center py-3 md:px-3 md:py-0">
+                  {/* Down arrow on mobile, right arrow on desktop */}
+                  <svg
+                    className="block md:hidden"
+                    width="20"
+                    height="20"
+                    viewBox="0 0 20 20"
+                    fill="none"
+                  >
+                    <path
+                      d="M10 3v11M10 14l-4-4M10 14l4-4"
+                      stroke="#52525b"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                  <svg
+                    className="hidden md:block"
+                    width="28"
+                    height="20"
+                    viewBox="0 0 28 20"
+                    fill="none"
+                  >
+                    <path
+                      d="M4 10h17M21 10l-5-5M21 10l-5 5"
+                      stroke="#52525b"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </section>
 
