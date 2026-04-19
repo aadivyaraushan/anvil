@@ -1,3 +1,30 @@
+export function buildArchetypePrompt(
+  ideaDescription: string,
+  targetProfile: string
+): string {
+  return `You are helping a founder map out their customer base before running interviews.
+
+Startup idea:
+${ideaDescription}
+
+Target profile described by founder:
+${targetProfile}
+
+Generate distinct customer archetypes for this product. Each archetype is a meaningfully different type of person who would approach this product with different needs, context, or behaviors.
+
+Generate as many archetypes as genuinely fit — typically 2–4, sometimes more for products with clearly distinct segments. Do not invent archetypes that do not follow naturally from the idea and target profile.
+
+Respond with ONLY a valid JSON array, no markdown, no explanation:
+[
+  {
+    "name": "short memorable archetype name, e.g. 'The Overwhelmed CFO'",
+    "description": "2-3 sentences: who they are, their situation, and why this product matters to them",
+    "job_titles": ["typical job title", "another typical job title"],
+    "pain_points": ["specific pain point for this archetype", "another pain point"]
+  }
+]`;
+}
+
 export type TranscriptTurn = {
   speaker: string;
   text: string;

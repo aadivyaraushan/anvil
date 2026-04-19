@@ -21,12 +21,14 @@ export type Project = {
   outreach_status: OutreachAgentStatus;
   outreach_progress: number;
   analyst_status: AnalystStatus;
+  archetypes_verified: boolean;
   created_at: string;
 };
 
 export type Contact = {
   id: string;
   project_id: string;
+  persona_id: string | null;
   source: ContactSource;
   first_name: string;
   last_name: string;
@@ -50,6 +52,7 @@ export type Interview = {
   id: string;
   project_id: string;
   contact_id: string | null;
+  persona_id: string | null;
   meeting_platform: MeetingPlatform;
   meeting_link: string;
   scheduled_at: string;
@@ -74,6 +77,16 @@ export type AnalystDocument = {
   interview_count: number;
   unique_pattern_count: number;
   updated_at: string;
+};
+
+export type Persona = {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string;
+  job_titles: string[];
+  pain_points: string[];
+  created_at: string;
 };
 
 export type ChatMessage = {
@@ -115,25 +128,32 @@ export type Subscription = {
 export type Database = {
   public: {
     Tables: {
+      personas: {
+        Row: Persona;
+        Insert: Omit<Persona, "id" | "created_at">;
+        Update: Partial<Omit<Persona, "id" | "created_at">>;
+        Relationships: [];
+      };
       projects: {
         Row: Project;
-        Insert: Omit<Project, "id" | "created_at" | "outreach_status" | "outreach_progress" | "analyst_status"> & {
+        Insert: Omit<Project, "id" | "created_at" | "outreach_status" | "outreach_progress" | "analyst_status" | "archetypes_verified"> & {
           outreach_status?: OutreachAgentStatus;
           outreach_progress?: number;
           analyst_status?: AnalystStatus;
+          archetypes_verified?: boolean;
         };
         Update: Partial<Omit<Project, "id">>;
         Relationships: [];
       };
       contacts: {
         Row: Contact;
-        Insert: Omit<Contact, "id">;
+        Insert: Omit<Contact, "id" | "persona_id"> & { persona_id?: string | null };
         Update: Partial<Omit<Contact, "id">>;
         Relationships: [];
       };
       interviews: {
         Row: Interview;
-        Insert: Omit<Interview, "id" | "created_at">;
+        Insert: Omit<Interview, "id" | "created_at" | "persona_id"> & { persona_id?: string | null };
         Update: Partial<Omit<Interview, "id">>;
         Relationships: [];
       };

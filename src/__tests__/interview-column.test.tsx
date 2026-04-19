@@ -42,6 +42,7 @@ const baseInterview: Interview = {
   id: "i1",
   project_id: "proj-1",
   contact_id: null,
+  persona_id: null,
   meeting_platform: "zoom",
   meeting_link: "https://zoom.us/j/123",
   scheduled_at: new Date(Date.now() + 86400_000).toISOString(), // tomorrow

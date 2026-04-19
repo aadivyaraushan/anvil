@@ -67,7 +67,7 @@ export async function createProject(formData: FormData) {
   const projectId = (data as { id: string }).id;
 
   revalidatePath("/dashboard");
-  redirect(`/project/${projectId}`);
+  redirect(`/project/${projectId}/archetypes`);
 }
 
 export async function updateProject(id: string, formData: FormData) {
@@ -91,6 +91,49 @@ export async function updateProject(id: string, formData: FormData) {
 
   revalidatePath(`/project/${id}`);
   revalidatePath(`/project/${id}/settings`);
+}
+
+export async function saveArchetypes(
+  projectId: string,
+  archetypes: Array<{
+    name: string;
+    description: string;
+    job_titles: string[];
+    pain_points: string[];
+  }>
+) {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  await supabase.from("personas").delete().eq("project_id", projectId);
+
+  if (archetypes.length > 0) {
+    const { error } = await supabase.from("personas").insert(
+      archetypes.map((a) => ({ ...a, project_id: projectId }))
+    );
+    if (error) throw error;
+  }
+
+  await supabase
+    .from("projects")
+    .update({ archetypes_verified: true })
+    .eq("id", projectId);
+
+  revalidatePath(`/project/${projectId}`);
+  redirect(`/project/${projectId}`);
+}
+
+export async function getPersonas(projectId: string) {
+  const supabase = await createServerSupabaseClient();
+  const { data } = await supabase
+    .from("personas")
+    .select("*")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+  return data ?? [];
 }
 
 export async function getAnalystDocument(projectId: string) {
