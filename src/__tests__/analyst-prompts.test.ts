@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildExtractorPrompt,
   buildSynthesizerPrompt,
-} from "@/lib/agents/synthesis/prompts";
+} from "@/lib/agents/analyst/prompts";
 
 const transcript = [
   { speaker: "Interviewer", text: "Tell me about your biggest pain point.", timestamp: 0 },

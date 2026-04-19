@@ -69,11 +69,11 @@ export default function LandingPage() {
 
           {/* Three-column workspace */}
           <div className="grid grid-cols-3 divide-x divide-border bg-background">
-            {/* Discovery Column */}
+            {/* Outreach Column */}
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">
-                  Discovery
+                  Outreach
                 </span>
                 <span className="rounded-md bg-accent px-2 py-0.5 text-[10px] font-medium text-accent-foreground">
                   Agent 1
@@ -147,11 +147,11 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Synthesis Column */}
+            {/* Analyst Column */}
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-foreground">
-                  Synthesis
+                  Analyst
                 </span>
                 <span className="rounded-md bg-accent px-2 py-0.5 text-[10px] font-medium text-accent-foreground">
                   Agent 3

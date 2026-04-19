@@ -2,7 +2,6 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import type { Contact, Project } from "@/lib/supabase/types";
 
-// Mock Supabase client (used for Realtime subscriptions)
 vi.mock("@/lib/supabase/client", () => ({
   createClient: vi.fn().mockReturnValue({
     channel: vi.fn().mockReturnValue({
@@ -13,7 +12,6 @@ vi.mock("@/lib/supabase/client", () => ({
   }),
 }));
 
-// Mock UI components to avoid @base-ui/react rendering issues in jsdom
 vi.mock("@/components/ui/badge", () => ({
   Badge: ({ children, className }: { children: React.ReactNode; className?: string }) => (
     <span data-testid="badge" className={className}>{children}</span>
@@ -46,26 +44,24 @@ const baseProject: Project = {
   name: "Test Project",
   target_profile: "CFOs",
   idea_description: "test",
-  prototype_url: null,
-  prototype_repo_url: null,
-  prototype_status: "deployed",
-  discovery_status: "idle",
-  discovery_progress: 0,
+  outreach_status: "idle",
+  outreach_progress: 0,
+  analyst_status: "idle",
   created_at: new Date().toISOString(),
 };
 
-describe("DiscoveryColumn", () => {
-  it("shows Run Discovery button when idle", async () => {
-    const { DiscoveryColumn } = await import("@/components/discovery-column");
-    render(<DiscoveryColumn project={baseProject} initialContacts={[]} />);
-    expect(screen.getByText("Run Discovery")).toBeDefined();
+describe("OutreachColumn", () => {
+  it("shows Run Outreach button when idle", async () => {
+    const { OutreachColumn } = await import("@/components/outreach-column");
+    render(<OutreachColumn project={baseProject} initialContacts={[]} />);
+    expect(screen.getByText("Run Outreach")).toBeDefined();
   });
 
   it("shows running state with progress", async () => {
-    const { DiscoveryColumn } = await import("@/components/discovery-column");
+    const { OutreachColumn } = await import("@/components/outreach-column");
     render(
-      <DiscoveryColumn
-        project={{ ...baseProject, discovery_status: "running", discovery_progress: 5 }}
+      <OutreachColumn
+        project={{ ...baseProject, outreach_status: "running", outreach_progress: 5 }}
         initialContacts={[]}
       />
     );
@@ -73,19 +69,19 @@ describe("DiscoveryColumn", () => {
     expect(screen.getByText(/5/)).toBeDefined();
   });
 
-  it("shows Continue Discovery button when partial", async () => {
-    const { DiscoveryColumn } = await import("@/components/discovery-column");
+  it("shows Continue Outreach button when partial", async () => {
+    const { OutreachColumn } = await import("@/components/outreach-column");
     render(
-      <DiscoveryColumn
-        project={{ ...baseProject, discovery_status: "partial", discovery_progress: 10 }}
+      <OutreachColumn
+        project={{ ...baseProject, outreach_status: "partial", outreach_progress: 10 }}
         initialContacts={[]}
       />
     );
-    expect(screen.getByText("Continue Discovery")).toBeDefined();
+    expect(screen.getByText("Continue Outreach")).toBeDefined();
   });
 
   it("shows contact cards with fit badges", async () => {
-    const { DiscoveryColumn } = await import("@/components/discovery-column");
+    const { OutreachColumn } = await import("@/components/outreach-column");
     const contacts: Contact[] = [
       {
         id: "c1",
@@ -110,8 +106,8 @@ describe("DiscoveryColumn", () => {
       },
     ];
     render(
-      <DiscoveryColumn
-        project={{ ...baseProject, discovery_status: "complete", discovery_progress: 1 }}
+      <OutreachColumn
+        project={{ ...baseProject, outreach_status: "complete", outreach_progress: 1 }}
         initialContacts={contacts}
       />
     );

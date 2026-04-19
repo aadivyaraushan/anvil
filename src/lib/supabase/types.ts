@@ -1,5 +1,4 @@
-export type PrototypeStatus = "pending" | "generating" | "deployed" | "failed";
-export type DiscoveryStatus = "idle" | "running" | "partial" | "complete";
+export type OutreachAgentStatus = "idle" | "running" | "partial" | "complete";
 export type ContactSource = "apollo" | "csv";
 export type FitStatus = "passed" | "skipped";
 export type OutreachStatus =
@@ -10,7 +9,7 @@ export type OutreachStatus =
   | "replied";
 export type MeetingPlatform = "zoom" | "google_meet";
 export type InterviewStatus = "scheduled" | "live" | "completed";
-export type SynthesisStatus = "idle" | "generating" | "complete" | "failed";
+export type AnalystStatus = "idle" | "generating" | "complete" | "failed";
 export type ChatRole = "user" | "assistant";
 
 export type Project = {
@@ -19,13 +18,9 @@ export type Project = {
   name: string;
   target_profile: string;
   idea_description: string;
-  prototype_url: string | null;
-  prototype_repo_url: string | null;
-  prototype_status: PrototypeStatus;
-  prototype_phase: string | null;
-  discovery_status: DiscoveryStatus;
-  discovery_progress: number;
-  synthesis_status: SynthesisStatus;
+  outreach_status: OutreachAgentStatus;
+  outreach_progress: number;
+  analyst_status: AnalystStatus;
   created_at: string;
 };
 
@@ -64,7 +59,7 @@ export type Interview = {
   created_at: string;
 };
 
-export type SynthesisDocument = {
+export type AnalystDocument = {
   id: string;
   project_id: string;
   content: Record<string, unknown>;
@@ -122,13 +117,10 @@ export type Database = {
     Tables: {
       projects: {
         Row: Project;
-        Insert: Omit<Project, "id" | "created_at" | "prototype_url" | "prototype_repo_url" | "prototype_phase" | "discovery_status" | "discovery_progress" | "synthesis_status"> & {
-          prototype_url?: string | null;
-          prototype_repo_url?: string | null;
-          prototype_phase?: string | null;
-          discovery_status?: DiscoveryStatus;
-          discovery_progress?: number;
-          synthesis_status?: SynthesisStatus;
+        Insert: Omit<Project, "id" | "created_at" | "outreach_status" | "outreach_progress" | "analyst_status"> & {
+          outreach_status?: OutreachAgentStatus;
+          outreach_progress?: number;
+          analyst_status?: AnalystStatus;
         };
         Update: Partial<Omit<Project, "id">>;
         Relationships: [];
@@ -145,10 +137,10 @@ export type Database = {
         Update: Partial<Omit<Interview, "id">>;
         Relationships: [];
       };
-      synthesis_documents: {
-        Row: SynthesisDocument;
-        Insert: Omit<SynthesisDocument, "id" | "updated_at">;
-        Update: Partial<Omit<SynthesisDocument, "id">>;
+      analyst_documents: {
+        Row: AnalystDocument;
+        Insert: Omit<AnalystDocument, "id" | "updated_at">;
+        Update: Partial<Omit<AnalystDocument, "id">>;
         Relationships: [];
       };
       chat_messages: {

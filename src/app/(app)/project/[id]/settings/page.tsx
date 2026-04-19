@@ -80,43 +80,6 @@ export default async function ProjectSettingsPage({
             </form>
           </CardContent>
         </Card>
-
-        {project.prototype_url && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Prototype</CardTitle>
-              <CardDescription>
-                Your deployed prototype.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm">
-              <div>
-                <span className="text-muted-foreground">URL: </span>
-                <a
-                  href={project.prototype_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline"
-                >
-                  {project.prototype_url}
-                </a>
-              </div>
-              {project.prototype_repo_url && (
-                <div>
-                  <span className="text-muted-foreground">Repo: </span>
-                  <a
-                    href={project.prototype_repo_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="underline"
-                  >
-                    {project.prototype_repo_url}
-                  </a>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        )}
       </div>
     </div>
   );

@@ -12,17 +12,15 @@ type Props = {
   initialContacts: Contact[];
 };
 
-export function DiscoveryColumn({ project: initialProject, initialContacts }: Props) {
+export function OutreachColumn({ project: initialProject, initialContacts }: Props) {
   const [project, setProject] = useState(initialProject);
   const [contacts, setContacts] = useState<Contact[]>(initialContacts);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [triggering, setTriggering] = useState(false);
 
-  // Subscribe to realtime updates
   useEffect(() => {
     const supabase = createClient();
 
-    // Listen for contact inserts/updates
     const contactChannel = supabase
       .channel(`contacts-${project.id}`)
       .on<Contact>(
@@ -46,9 +44,8 @@ export function DiscoveryColumn({ project: initialProject, initialContacts }: Pr
       )
       .subscribe();
 
-    // Listen for project status/progress changes
     const projectChannel = supabase
-      .channel(`project-discovery-${project.id}`)
+      .channel(`project-outreach-${project.id}`)
       .on<Project>(
         "postgres_changes",
         {
@@ -61,8 +58,8 @@ export function DiscoveryColumn({ project: initialProject, initialContacts }: Pr
           const updated = payload.new as Project;
           setProject((prev) => ({
             ...prev,
-            discovery_status: updated.discovery_status,
-            discovery_progress: updated.discovery_progress,
+            outreach_status: updated.outreach_status,
+            outreach_progress: updated.outreach_progress,
           }));
         }
       )
@@ -74,35 +71,34 @@ export function DiscoveryColumn({ project: initialProject, initialContacts }: Pr
     };
   }, [project.id]);
 
-  async function triggerDiscovery() {
+  async function triggerOutreach() {
     setTriggering(true);
     try {
-      await fetch(`/api/projects/${project.id}/discover`, { method: "POST" });
+      await fetch(`/api/projects/${project.id}/outreach`, { method: "POST" });
     } finally {
       setTriggering(false);
     }
   }
 
-  const isRunning = project.discovery_status === "running";
-  const isPartial = project.discovery_status === "partial";
-  const isComplete = project.discovery_status === "complete";
+  const isRunning = project.outreach_status === "running";
+  const isPartial = project.outreach_status === "partial";
+  const isComplete = project.outreach_status === "complete";
   const total = contacts.length > 0 ? contacts.length : 50;
 
   return (
     <div className="flex flex-col gap-3 overflow-auto p-4">
-      {/* Status / trigger */}
-      {(project.discovery_status === "idle" || isComplete) && (
+      {(project.outreach_status === "idle" || isComplete) && (
         <Button
           size="sm"
           className="w-full"
-          onClick={triggerDiscovery}
+          onClick={triggerOutreach}
           disabled={triggering}
         >
           {triggering
             ? "Starting..."
             : isComplete
-            ? "Re-run Discovery"
-            : "Run Discovery"}
+            ? "Re-run Outreach"
+            : "Run Outreach"}
         </Button>
       )}
 
@@ -112,27 +108,26 @@ export function DiscoveryColumn({ project: initialProject, initialContacts }: Pr
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
             <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
           </span>
-          Processing {project.discovery_progress} of {total} contacts...
+          Processing {project.outreach_progress} of {total} contacts...
         </div>
       )}
 
       {isPartial && (
         <div className="space-y-2">
           <p className="text-xs text-muted-foreground">
-            {project.discovery_progress} of {total} processed
+            {project.outreach_progress} of {total} processed
           </p>
           <Button
             size="sm"
             className="w-full"
-            onClick={triggerDiscovery}
+            onClick={triggerOutreach}
             disabled={triggering}
           >
-            {triggering ? "Resuming..." : "Continue Discovery"}
+            {triggering ? "Resuming..." : "Continue Outreach"}
           </Button>
         </div>
       )}
 
-      {/* Contact list */}
       <div className="space-y-2">
         {contacts.map((contact) => (
           <div
@@ -172,7 +167,6 @@ export function DiscoveryColumn({ project: initialProject, initialContacts }: Pr
               </div>
             </div>
 
-            {/* Expanded email draft */}
             {expandedId === contact.id && contact.email_draft && (
               <div className="mt-3 rounded-md bg-background p-2">
                 <p className="text-[10px] font-mono leading-relaxed text-muted-foreground whitespace-pre-wrap">
@@ -184,9 +178,9 @@ export function DiscoveryColumn({ project: initialProject, initialContacts }: Pr
         ))}
       </div>
 
-      {contacts.length === 0 && project.discovery_status === "idle" && (
+      {contacts.length === 0 && project.outreach_status === "idle" && (
         <p className="text-[11px] text-muted-foreground text-center pt-4">
-          Click &quot;Run Discovery&quot; to source and research contacts.
+          Click &quot;Run Outreach&quot; to source and research contacts.
         </p>
       )}
     </div>

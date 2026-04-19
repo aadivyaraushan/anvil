@@ -12,7 +12,7 @@ export default async function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold" style={{ letterSpacing: "-0.02em" }}>Projects</h1>
           <p className="text-sm text-muted-foreground">
-            Your customer discovery campaigns.
+            Your customer research projects.
           </p>
         </div>
         <Link href="/dashboard/new">

@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { SynthesisDocument, SynthesisStatus } from "@/lib/supabase/types";
+import type { AnalystDocument, AnalystStatus } from "@/lib/supabase/types";
 
 type PainPoint = {
   description: string;
@@ -21,8 +21,8 @@ type Pattern = {
 
 type Props = {
   projectId: string;
-  initialDocument: SynthesisDocument | null;
-  initialSynthesisStatus: SynthesisStatus;
+  initialDocument: AnalystDocument | null;
+  initialAnalystStatus: AnalystStatus;
   completedInterviewCount: number;
 };
 
@@ -32,37 +32,37 @@ function severityClass(severity: string): string {
   return "border-zinc-500/50 text-zinc-400";
 }
 
-export function SynthesisColumn({
+export function AnalystColumn({
   projectId,
   initialDocument,
-  initialSynthesisStatus,
+  initialAnalystStatus,
   completedInterviewCount,
 }: Props) {
-  const [document, setDocument] = useState<SynthesisDocument | null>(initialDocument);
-  const [status, setStatus] = useState<SynthesisStatus>(initialSynthesisStatus);
+  const [document, setDocument] = useState<AnalystDocument | null>(initialDocument);
+  const [status, setStatus] = useState<AnalystStatus>(initialAnalystStatus);
   const [triggering, setTriggering] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
 
     const docChannel = supabase
-      .channel(`synthesis-doc-${projectId}`)
+      .channel(`analyst-doc-${projectId}`)
       .on(
         "postgres_changes",
         {
           event: "UPDATE",
           schema: "public",
-          table: "synthesis_documents",
+          table: "analyst_documents",
           filter: `project_id=eq.${projectId}`,
         },
         (payload) => {
-          setDocument(payload.new as SynthesisDocument);
+          setDocument(payload.new as AnalystDocument);
         }
       )
       .subscribe();
 
     const projChannel = supabase
-      .channel(`synthesis-status-${projectId}`)
+      .channel(`analyst-status-${projectId}`)
       .on(
         "postgres_changes",
         {
@@ -72,8 +72,8 @@ export function SynthesisColumn({
           filter: `id=eq.${projectId}`,
         },
         (payload) => {
-          const updated = payload.new as { synthesis_status: SynthesisStatus };
-          setStatus(updated.synthesis_status);
+          const updated = payload.new as { analyst_status: AnalystStatus };
+          setStatus(updated.analyst_status);
         }
       )
       .subscribe();
@@ -84,10 +84,10 @@ export function SynthesisColumn({
     };
   }, [projectId]);
 
-  async function runSynthesis() {
+  async function runAnalyst() {
     setTriggering(true);
     try {
-      await fetch(`/api/projects/${projectId}/synthesize`, { method: "POST" });
+      await fetch(`/api/projects/${projectId}/analyst`, { method: "POST" });
     } finally {
       setTriggering(false);
     }
@@ -102,20 +102,19 @@ export function SynthesisColumn({
 
   return (
     <div className="flex flex-col gap-4 p-4 overflow-auto h-full">
-      {/* Run button */}
       <div className="flex items-center gap-2">
         <Button
           size="sm"
           variant={hasData ? "outline" : "default"}
           disabled={isGenerating || triggering || completedInterviewCount === 0}
-          onClick={runSynthesis}
+          onClick={runAnalyst}
           className="text-xs"
         >
           {isGenerating
             ? "Generating..."
             : hasData
-            ? "Re-run Synthesis"
-            : "Run Synthesis"}
+            ? "Re-run Analyst"
+            : "Run Analyst"}
         </Button>
         {completedInterviewCount === 0 && (
           <span className="text-xs text-muted-foreground">
@@ -127,7 +126,6 @@ export function SynthesisColumn({
         )}
       </div>
 
-      {/* Loading state */}
       {isGenerating && (
         <div className="space-y-2">
           <div className="h-2 w-full animate-pulse rounded bg-accent" />
@@ -140,10 +138,8 @@ export function SynthesisColumn({
         </div>
       )}
 
-      {/* Results */}
       {hasData && !isGenerating && (
         <div className="space-y-5">
-          {/* Stats */}
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded bg-accent/40 p-2 text-center">
               <p className="text-base font-semibold">{document.saturation_score}%</p>
@@ -159,7 +155,6 @@ export function SynthesisColumn({
             </div>
           </div>
 
-          {/* Executive summary */}
           {summary && (
             <section>
               <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -169,7 +164,6 @@ export function SynthesisColumn({
             </section>
           )}
 
-          {/* Pain points */}
           {painPoints.length > 0 && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -202,7 +196,6 @@ export function SynthesisColumn({
             </section>
           )}
 
-          {/* Patterns */}
           {patterns.length > 0 && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -226,7 +219,6 @@ export function SynthesisColumn({
             </section>
           )}
 
-          {/* Key quotes */}
           {keyQuotes.length > 0 && (
             <section>
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -247,12 +239,11 @@ export function SynthesisColumn({
         </div>
       )}
 
-      {/* Empty state */}
       {!hasData && !isGenerating && (
         <p className="text-xs text-muted-foreground">
           {completedInterviewCount === 0
-            ? "Complete interviews to unlock synthesis."
-            : "Click Run Synthesis to analyze your interviews."}
+            ? "Complete interviews to unlock analysis."
+            : "Click Run Analyst to analyze your interviews."}
         </p>
       )}
     </div>

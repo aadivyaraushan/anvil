@@ -4,7 +4,7 @@ export type PlanLimits = {
   projects: number;          // Infinity = unlimited
   contactsPerProject: number;
   interviewsPerProject: number;
-  synthesisRuns: number;
+  analystRuns: number;
   liveAICopilot: boolean;
 };
 
@@ -27,14 +27,13 @@ export const PLANS: Record<Plan, PlanConfig> = {
     projects: 1,
     contactsPerProject: 5,
     interviewsPerProject: 2,
-    synthesisRuns: 1,
+    analystRuns: 1,
     liveAICopilot: false,
     features: [
       "1 project",
       "5 contacts per project",
       "2 interviews per project",
-      "Prototype auto-build",
-      "1 synthesis run",
+      "1 analyst run",
     ],
   },
   pro: {
@@ -46,15 +45,14 @@ export const PLANS: Record<Plan, PlanConfig> = {
     projects: 10,
     contactsPerProject: 100,
     interviewsPerProject: 20,
-    synthesisRuns: Infinity,
+    analystRuns: Infinity,
     liveAICopilot: true,
     features: [
       "10 projects",
       "100 contacts per project",
       "20 interviews per project",
       "Live AI interview copilot",
-      "Unlimited synthesis runs",
-      "Prototype auto-build",
+      "Unlimited analyst runs",
     ],
   },
   max: {
@@ -66,15 +64,14 @@ export const PLANS: Record<Plan, PlanConfig> = {
     projects: Infinity,
     contactsPerProject: Infinity,
     interviewsPerProject: Infinity,
-    synthesisRuns: Infinity,
+    analystRuns: Infinity,
     liveAICopilot: true,
     features: [
       "Unlimited projects",
       "Unlimited contacts",
       "Unlimited interviews",
       "Live AI interview copilot",
-      "Unlimited synthesis runs",
-      "Prototype auto-build",
+      "Unlimited analyst runs",
       "Priority support",
     ],
   },

@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Anvil — Customer Discovery Platform",
   description:
-    "Run customer discovery with three parallel AI agents: Discovery, Interview Copilot, and Synthesis.",
+    "Run customer discovery with three parallel AI agents: Outreach, Interview Copilot, and Analyst.",
 };
 
 export default function RootLayout({

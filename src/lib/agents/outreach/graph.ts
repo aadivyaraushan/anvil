@@ -1,5 +1,5 @@
 import { StateGraph, START, END } from "@langchain/langgraph";
-import { DiscoveryStateAnnotation } from "./state";
+import { OutreachStateAnnotation } from "./state";
 import {
   sourceContacts,
   researchContact,
@@ -9,21 +9,21 @@ import {
   sendOrQueue,
   routeNext,
 } from "./nodes";
-import type { DiscoveryState } from "./state";
+import type { OutreachState } from "./state";
 
-function shouldDraftOrSkip(state: DiscoveryState): "draftEmail" | "routeNext" {
+function shouldDraftOrSkip(state: OutreachState): "draftEmail" | "routeNext" {
   const contact = state.contacts[state.currentIndex];
   if (!contact) return "routeNext";
   return contact.fit_status === "passed" ? "draftEmail" : "routeNext";
 }
 
-function shouldContinueOrEnd(state: DiscoveryState): "researchContact" | typeof END {
+function shouldContinueOrEnd(state: OutreachState): "researchContact" | typeof END {
   const nextIndex = state.currentIndex;
   return nextIndex < state.contacts.length ? "researchContact" : END;
 }
 
-export function buildDiscoveryGraph() {
-  return new StateGraph(DiscoveryStateAnnotation)
+export function buildOutreachGraph() {
+  return new StateGraph(OutreachStateAnnotation)
     .addNode("sourceContacts", sourceContacts)
     .addNode("researchContact", researchContact)
     .addNode("scoreContact", scoreContact)
