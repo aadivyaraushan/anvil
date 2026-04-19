@@ -1,8 +1,8 @@
 import { after } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { buildDiscoveryGraph } from "@/lib/agents/discovery/graph";
-import type { DiscoveryState } from "@/lib/agents/discovery/state";
+import { buildOutreachGraph } from "@/lib/agents/outreach/graph";
+import type { OutreachState } from "@/lib/agents/outreach/state";
 import type { Contact } from "@/lib/supabase/types";
 
 export async function POST(
@@ -12,7 +12,6 @@ export async function POST(
   const { id } = await ctx.params;
   const supabase = await createServerSupabaseClient();
 
-  // Auth check
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -20,7 +19,6 @@ export async function POST(
     return Response.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  // Fetch project (validates ownership via RLS)
   const { data: project, error: projectError } = await supabase
     .from("projects")
     .select("*")
@@ -31,23 +29,20 @@ export async function POST(
     return Response.json({ error: "Project not found" }, { status: 404 });
   }
 
-  // Prevent double-trigger
-  if (project.discovery_status === "running") {
+  if (project.outreach_status === "running") {
     return Response.json(
-      { error: "Discovery is already running" },
+      { error: "Outreach is already running" },
       { status: 409 }
     );
   }
 
-  // Fetch user settings
   const { data: settings } = await supabase
     .from("user_settings")
     .select("*")
     .eq("user_id", user.id)
     .single();
 
-  // If resuming a partial run, fetch existing pending contacts
-  const isResume = project.discovery_status === "partial";
+  const isResume = project.outreach_status === "partial";
   let existingContacts: Contact[] = [];
 
   if (isResume) {
@@ -59,13 +54,12 @@ export async function POST(
     existingContacts = (pending ?? []) as Contact[];
   }
 
-  // Mark as running
   await supabase
     .from("projects")
-    .update({ discovery_status: "running" })
+    .update({ outreach_status: "running" })
     .eq("id", id);
 
-  const initialState: Partial<DiscoveryState> = {
+  const initialState: Partial<OutreachState> = {
     projectId: id,
     targetProfile: project.target_profile,
     ideaDescription: project.idea_description,
@@ -77,15 +71,13 @@ export async function POST(
     errors: [],
   };
 
-  // Run agent in background after response is sent
   after(async () => {
     try {
-      const graph = buildDiscoveryGraph();
+      const graph = buildOutreachGraph();
       if (isResume && existingContacts.length > 10) {
         const batch = existingContacts.slice(0, 10);
         initialState.contacts = batch;
         await graph.invoke(initialState);
-        // Check if more pending contacts remain
         const supabaseInner = await createServerSupabaseClient();
         const { data: remaining } = await supabaseInner
           .from("contacts")
@@ -95,7 +87,7 @@ export async function POST(
         if (remaining && remaining.length > 0) {
           await supabaseInner
             .from("projects")
-            .update({ discovery_status: "partial" })
+            .update({ outreach_status: "partial" })
             .eq("id", id);
         }
       } else {
@@ -105,9 +97,9 @@ export async function POST(
       const supabaseInner = await createServerSupabaseClient();
       await supabaseInner
         .from("projects")
-        .update({ discovery_status: "idle" })
+        .update({ outreach_status: "idle" })
         .eq("id", id);
-      console.error("Discovery agent failed:", err);
+      console.error("Outreach agent failed:", err);
     }
   });
 

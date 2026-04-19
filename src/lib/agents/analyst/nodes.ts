@@ -6,10 +6,10 @@ import {
   type ExtractionInput,
 } from "./prompts";
 import type {
-  SynthesisState,
+  AnalystState,
   CompletedInterview,
   ContactMap,
-  SynthesisResult,
+  AnalystResult,
 } from "./state";
 
 let _llm: ReturnType<typeof createLlm> | null = null;
@@ -35,8 +35,8 @@ function parseJson(text: string): unknown {
 // ── Node 1: fetchData ────────────────────────────────────────────────────────
 
 export async function fetchData(
-  state: SynthesisState
-): Promise<Partial<SynthesisState>> {
+  state: AnalystState
+): Promise<Partial<AnalystState>> {
   const supabase = await createServerSupabaseClient();
 
   const { data: interviewRows, error: iErr } = await supabase
@@ -51,7 +51,7 @@ export async function fetchData(
 
   if (interviews.length === 0) {
     throw new Error(
-      "No completed interviews found. Complete at least one interview before running synthesis."
+      "No completed interviews found. Complete at least one interview before running the analyst."
     );
   }
 
@@ -90,8 +90,8 @@ export async function fetchData(
 // ── Node 2: extractAll ───────────────────────────────────────────────────────
 
 export async function extractAll(
-  state: SynthesisState
-): Promise<Partial<SynthesisState>> {
+  state: AnalystState
+): Promise<Partial<AnalystState>> {
   const extractionPromises = state.interviews.map(async (interview) => {
     const contact = state.contacts[interview.contact_id ?? ""] ?? {
       name: "Participant",
@@ -138,8 +138,8 @@ export async function extractAll(
 // ── Node 3: synthesize ───────────────────────────────────────────────────────
 
 export async function synthesize(
-  state: SynthesisState
-): Promise<Partial<SynthesisState>> {
+  state: AnalystState
+): Promise<Partial<AnalystState>> {
   const response = await getLlm().invoke(
     buildSynthesizerPrompt(state.extractedData, {
       ideaDescription: state.ideaDescription,
@@ -153,20 +153,20 @@ export async function synthesize(
       ? response.content
       : JSON.stringify(response.content);
 
-  const result = parseJson(text) as SynthesisResult;
-  return { synthesisResult: result };
+  const result = parseJson(text) as AnalystResult;
+  return { analystResult: result };
 }
 
-// ── Node 4: saveSynthesis ────────────────────────────────────────────────────
+// ── Node 4: saveAnalyst ────────────────────────────────────────────────────
 
-export async function saveSynthesis(
-  state: SynthesisState
-): Promise<Partial<SynthesisState>> {
-  const result = state.synthesisResult!;
+export async function saveAnalyst(
+  state: AnalystState
+): Promise<Partial<AnalystState>> {
+  const result = state.analystResult!;
   const supabase = await createServerSupabaseClient();
 
   const { error: docErr } = await supabase
-    .from("synthesis_documents")
+    .from("analyst_documents")
     .update({
       content: {
         summary: result.summary,
@@ -182,16 +182,16 @@ export async function saveSynthesis(
     .eq("project_id", state.projectId);
 
   if (docErr) {
-    console.error("[synthesis] saveSynthesis doc update failed:", docErr.message);
+    console.error("[analyst] saveAnalyst doc update failed:", docErr.message);
   }
 
   const { error: projErr } = await supabase
     .from("projects")
-    .update({ synthesis_status: "complete" })
+    .update({ analyst_status: "complete" })
     .eq("id", state.projectId);
 
   if (projErr) {
-    console.error("[synthesis] synthesis_status update failed:", projErr.message);
+    console.error("[analyst] analyst_status update failed:", projErr.message);
   }
 
   return {};

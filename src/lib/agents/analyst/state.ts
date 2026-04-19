@@ -12,7 +12,7 @@ export type ContactMap = Record<
   { name: string; title: string; company: string }
 >;
 
-export type SynthesisResult = {
+export type AnalystResult = {
   summary: string;
   painPoints: Array<{
     description: string;
@@ -31,7 +31,7 @@ export type SynthesisResult = {
   recommendations: string[];
 };
 
-export const SynthesisStateAnnotation = Annotation.Root({
+export const AnalystStateAnnotation = Annotation.Root({
   projectId: Annotation<string>(),
   projectName: Annotation<string>(),
   ideaDescription: Annotation<string>(),
@@ -49,10 +49,10 @@ export const SynthesisStateAnnotation = Annotation.Root({
     default: () => [],
     reducer: (_, next) => next,
   }),
-  synthesisResult: Annotation<SynthesisResult | null>({
+  analystResult: Annotation<AnalystResult | null>({
     default: () => null,
     reducer: (_, next) => next,
   }),
 });
 
-export type SynthesisState = typeof SynthesisStateAnnotation.State;
+export type AnalystState = typeof AnalystStateAnnotation.State;

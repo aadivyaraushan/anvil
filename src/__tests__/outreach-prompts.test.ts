@@ -5,7 +5,7 @@ import {
   buildFitScorePrompt,
   buildEmailDraftPrompt,
   buildQualityCheckPrompt,
-} from "@/lib/agents/discovery/prompts";
+} from "@/lib/agents/outreach/prompts";
 
 describe("buildApolloParamsPrompt", () => {
   it("includes target profile in the prompt", () => {

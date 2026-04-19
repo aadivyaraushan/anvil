@@ -44,8 +44,7 @@ export async function seedProject(opts: {
   name?: string;
   ideaDescription?: string;
   targetProfile?: string;
-  prototypeStatus?: "pending" | "generating" | "deployed" | "failed";
-  synthesisStatus?: "idle" | "generating" | "complete" | "failed";
+  analystStatus?: "idle" | "generating" | "complete" | "failed";
 }): Promise<string> {
   const supabase = adminClient();
   const { data, error } = await supabase
@@ -56,10 +55,7 @@ export async function seedProject(opts: {
       idea_description:
         opts.ideaDescription ?? "A test idea for E2E testing.",
       target_profile: opts.targetProfile ?? "QA engineers",
-      prototype_status: opts.prototypeStatus ?? "deployed",
-      // Note: prototype_phase and synthesis_status columns require migrations 003/004
-      // which may not be applied in all environments. Omit them from insert;
-      // PostgREST returns only the columns that exist.
+      ...(opts.analystStatus ? { analyst_status: opts.analystStatus } : {}),
     })
     .select("id")
     .single();

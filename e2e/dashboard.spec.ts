@@ -35,14 +35,6 @@ test.describe("dashboard", () => {
   });
 
   test("submitting the form redirects to /project/:id", async ({ page }) => {
-    // Mock prototype API to prevent background LangGraph invocation
-    await page.route("**/api/projects/*/prototype", (route) => {
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({ status: "started" }),
-      });
-    });
-
     await page.goto("/dashboard/new");
 
     await page.locator('input[name="name"]').fill("E2E Playwright Test Project");

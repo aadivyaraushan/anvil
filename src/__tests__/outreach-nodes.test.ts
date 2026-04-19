@@ -165,7 +165,7 @@ describe("Resend client", () => {
 
 describe("sourceContacts node", () => {
   it("inserts contacts into DB and returns updated state", async () => {
-    const { sourceContacts } = await import("@/lib/agents/discovery/nodes");
+    const { sourceContacts } = await import("@/lib/agents/outreach/nodes");
 
     const state = {
       projectId: "proj-1",
@@ -188,7 +188,7 @@ describe("sourceContacts node", () => {
 
 describe("routeNext routing logic", () => {
   it("returns nextIndex = 1 when currentIndex is 0 and contacts has 2 items", async () => {
-    const { routeNext } = await import("@/lib/agents/discovery/nodes");
+    const { routeNext } = await import("@/lib/agents/outreach/nodes");
 
     const state = {
       projectId: "proj-1",
@@ -210,7 +210,7 @@ describe("routeNext routing logic", () => {
   });
 
   it("returns nextIndex = 2 when all contacts processed", async () => {
-    const { routeNext } = await import("@/lib/agents/discovery/nodes");
+    const { routeNext } = await import("@/lib/agents/outreach/nodes");
 
     const state = {
       projectId: "proj-1",

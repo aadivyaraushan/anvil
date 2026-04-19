@@ -1,7 +1,7 @@
 import { Annotation } from "@langchain/langgraph";
 import type { Contact } from "@/lib/supabase/types";
 
-export const DiscoveryStateAnnotation = Annotation.Root({
+export const OutreachStateAnnotation = Annotation.Root({
   projectId: Annotation<string>(),
   targetProfile: Annotation<string>(),
   ideaDescription: Annotation<string>(),
@@ -22,4 +22,4 @@ export const DiscoveryStateAnnotation = Annotation.Root({
   }),
 });
 
-export type DiscoveryState = typeof DiscoveryStateAnnotation.State;
+export type OutreachState = typeof OutreachStateAnnotation.State;

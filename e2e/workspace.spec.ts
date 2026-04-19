@@ -19,71 +19,13 @@ test.afterAll(async () => {
   await cleanupProjectsForUser(testUserId);
 });
 
-test.describe("workspace — build phase", () => {
+test.describe("workspace — three-column grid", () => {
   let projectId: string;
 
   test.beforeEach(async () => {
     projectId = await seedProject({
       userId: testUserId,
-      name: "Build Phase Project",
-      prototypeStatus: "generating",
-    });
-  });
-
-  test.afterEach(async () => {
-    await cleanupProjectsForUser(testUserId);
-  });
-
-  test("hides three-column grid when prototype is generating", async ({
-    page,
-  }) => {
-    await page.route(`**/api/projects/${projectId}/prototype`, (route) => {
-      route.fulfill({
-        status: 409,
-        body: JSON.stringify({ status: "already_running" }),
-      });
-    });
-
-    await page.goto(`/project/${projectId}`);
-
-    // Three-column grid must NOT be visible in build phase
-    await expect(
-      page.getByRole("heading", { name: "Discovery" })
-    ).not.toBeVisible();
-  });
-
-  test("shows retry button when prototype_status is failed", async ({
-    page,
-  }) => {
-    // Re-seed with failed status for this test (the beforeEach seeded "generating")
-    await cleanupProjectsForUser(testUserId);
-    projectId = await seedProject({
-      userId: testUserId,
-      name: "Failed Build Project",
-      prototypeStatus: "failed",
-    });
-    // afterEach will clean up using the updated projectId
-
-    await page.route(`**/api/projects/${projectId}/prototype`, (route) => {
-      route.fulfill({
-        status: 200,
-        body: JSON.stringify({ status: "started" }),
-      });
-    });
-
-    await page.goto(`/project/${projectId}`);
-    await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
-  });
-});
-
-test.describe("workspace — deployed phase (three-column grid)", () => {
-  let projectId: string;
-
-  test.beforeEach(async () => {
-    projectId = await seedProject({
-      userId: testUserId,
-      name: "Deployed Project",
-      prototypeStatus: "deployed",
+      name: "Workspace Project",
     });
   });
 
@@ -94,21 +36,21 @@ test.describe("workspace — deployed phase (three-column grid)", () => {
   test("renders all three column headers", async ({ page }) => {
     await page.goto(`/project/${projectId}`);
     await expect(
-      page.getByRole("heading", { name: "Discovery" })
+      page.getByRole("heading", { name: "Outreach" })
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Interviews" })
     ).toBeVisible();
     await expect(
-      page.getByRole("heading", { name: "Synthesis" })
+      page.getByRole("heading", { name: "Analyst" })
     ).toBeVisible();
   });
 
-  test("Run Synthesis button is disabled with no completed interviews", async ({
+  test("Run Analyst button is disabled with no completed interviews", async ({
     page,
   }) => {
     await page.goto(`/project/${projectId}`);
-    const runBtn = page.getByRole("button", { name: /Synthesis/ });
+    const runBtn = page.getByRole("button", { name: /Analyst/ });
     await expect(runBtn).toBeVisible();
     await expect(runBtn).toBeDisabled();
     await expect(
@@ -116,10 +58,10 @@ test.describe("workspace — deployed phase (three-column grid)", () => {
     ).toBeVisible();
   });
 
-  test("Run Synthesis button is enabled after completed interview seeded", async ({
+  test("Run Analyst button is enabled after completed interview seeded", async ({
     page,
   }) => {
-    await page.route(`**/api/projects/${projectId}/synthesize`, (route) => {
+    await page.route(`**/api/projects/${projectId}/analyst`, (route) => {
       route.fulfill({
         status: 200,
         body: JSON.stringify({ status: "started" }),
@@ -136,7 +78,7 @@ test.describe("workspace — deployed phase (three-column grid)", () => {
 
     await page.goto(`/project/${projectId}`);
     await expect(
-      page.getByRole("button", { name: /Synthesis/ })
+      page.getByRole("button", { name: /Analyst/ })
     ).toBeEnabled({ timeout: 10_000 });
     await expect(
       page.getByText("Complete an interview first")

@@ -10,7 +10,7 @@ import {
   buildEmailDraftPrompt,
   buildQualityCheckPrompt,
 } from "./prompts";
-import type { DiscoveryState } from "./state";
+import type { OutreachState } from "./state";
 import type { Contact } from "@/lib/supabase/types";
 
 let _llm: ReturnType<typeof createLlm> | null = null;
@@ -31,8 +31,8 @@ function parseJson(text: string): Record<string, unknown> {
 // ── Node 1: sourceContacts ──────────────────────────────────────────────────
 
 export async function sourceContacts(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const supabase = await createServerSupabaseClient();
 
   const paramsResponse = await getLlm().invoke(
@@ -55,7 +55,7 @@ export async function sourceContacts(
   } catch (err) {
     await supabase
       .from("projects")
-      .update({ discovery_status: "idle" })
+      .update({ outreach_status: "idle" })
       .eq("id", state.projectId);
     return { errors: [`Apollo sourcing failed: ${String(err)}`] };
   }
@@ -63,7 +63,7 @@ export async function sourceContacts(
   if (apolloContacts.length === 0) {
     await supabase
       .from("projects")
-      .update({ discovery_status: "complete" })
+      .update({ outreach_status: "complete" })
       .eq("id", state.projectId);
     return { contacts: [], errors: ["No contacts found from Apollo"] };
   }
@@ -98,7 +98,7 @@ export async function sourceContacts(
 
   await supabase
     .from("projects")
-    .update({ discovery_status: "running", discovery_progress: 0 })
+    .update({ outreach_status: "running", outreach_progress: 0 })
     .eq("id", state.projectId);
 
   return { contacts: data as Contact[], currentIndex: 0 };
@@ -107,8 +107,8 @@ export async function sourceContacts(
 // ── Node 2: researchContact ─────────────────────────────────────────────────
 
 export async function researchContact(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const contact = state.contacts[state.currentIndex];
   const supabase = await createServerSupabaseClient();
 
@@ -165,8 +165,8 @@ export async function researchContact(
 // ── Node 3: scoreContact ────────────────────────────────────────────────────
 
 export async function scoreContact(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const contact = state.contacts[state.currentIndex];
   const supabase = await createServerSupabaseClient();
 
@@ -227,8 +227,8 @@ export async function scoreContact(
 // ── Node 4: draftEmail ──────────────────────────────────────────────────────
 
 export async function draftEmail(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const contact = state.contacts[state.currentIndex];
   const supabase = await createServerSupabaseClient();
 
@@ -275,8 +275,8 @@ export async function draftEmail(
 // ── Node 5: qualityCheck ────────────────────────────────────────────────────
 
 export async function qualityCheck(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const contact = state.contacts[state.currentIndex];
   const supabase = await createServerSupabaseClient();
 
@@ -309,8 +309,8 @@ export async function qualityCheck(
 // ── Node 6: sendOrQueue ─────────────────────────────────────────────────────
 
 export async function sendOrQueue(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const contact = state.contacts[state.currentIndex];
   const supabase = await createServerSupabaseClient();
 
@@ -339,7 +339,7 @@ export async function sendOrQueue(
   const newProgress = (state.currentIndex ?? 0) + 1;
   await supabase
     .from("projects")
-    .update({ discovery_progress: newProgress })
+    .update({ outreach_progress: newProgress })
     .eq("id", state.projectId);
 
   const updatedContacts = [...state.contacts];
@@ -355,15 +355,15 @@ export async function sendOrQueue(
 // ── Node 7: routeNext ───────────────────────────────────────────────────────
 
 export async function routeNext(
-  state: DiscoveryState
-): Promise<Partial<DiscoveryState>> {
+  state: OutreachState
+): Promise<Partial<OutreachState>> {
   const nextIndex = state.currentIndex + 1;
 
   if (nextIndex >= state.contacts.length) {
     const supabase = await createServerSupabaseClient();
     await supabase
       .from("projects")
-      .update({ discovery_status: "complete" })
+      .update({ outreach_status: "complete" })
       .eq("id", state.projectId);
     return { currentIndex: nextIndex };
   }

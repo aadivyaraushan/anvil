@@ -103,11 +103,6 @@ test.describe("billing — plan limit enforcement", () => {
   });
 
   test("creating a project over free limit redirects to /billing?limit=projects", async ({ page }) => {
-    // Mock prototype API to prevent real LangGraph calls
-    await page.route("**/api/projects/*/prototype", (route) =>
-      route.fulfill({ status: 200, body: JSON.stringify({ status: "started" }) })
-    );
-
     await page.goto("/dashboard/new");
     await page.locator('input[name="name"]').fill("Overflow Project");
     await page.locator('textarea[name="idea_description"]').fill("Testing plan limits.");

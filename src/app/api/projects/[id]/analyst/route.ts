@@ -1,7 +1,7 @@
 import { after } from "next/server";
 import type { NextRequest } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { buildSynthesisGraph } from "@/lib/agents/synthesis/graph";
+import { buildAnalystGraph } from "@/lib/agents/analyst/graph";
 
 export async function POST(
   _req: NextRequest,
@@ -25,18 +25,18 @@ export async function POST(
     return Response.json({ error: "Project not found" }, { status: 404 });
   }
 
-  if (project.synthesis_status === "generating") {
+  if (project.analyst_status === "generating") {
     return Response.json({ status: "already_running" }, { status: 409 });
   }
 
   await supabase
     .from("projects")
-    .update({ synthesis_status: "generating" })
+    .update({ analyst_status: "generating" })
     .eq("id", id);
 
   after(async () => {
     try {
-      const graph = buildSynthesisGraph();
+      const graph = buildAnalystGraph();
       await graph.invoke({
         projectId: id,
         projectName: project.name,
@@ -45,15 +45,15 @@ export async function POST(
         interviews: [],
         contacts: {},
         extractedData: [],
-        synthesisResult: null,
+        analystResult: null,
       });
     } catch (err) {
       const supabaseInner = await createServerSupabaseClient();
       await supabaseInner
         .from("projects")
-        .update({ synthesis_status: "failed" })
+        .update({ analyst_status: "failed" })
         .eq("id", id);
-      console.error("[synthesis] graph failed:", String(err));
+      console.error("[analyst] graph failed:", String(err));
     }
   });
 

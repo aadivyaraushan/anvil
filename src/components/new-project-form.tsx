@@ -33,7 +33,7 @@ export function NewProjectForm() {
         <CardTitle>Create a new project</CardTitle>
         <CardDescription>
           Describe your startup idea and who you want to talk to. Anvil will
-          build a prototype, find candidates, and help you run interviews.
+          find candidates, help you run interviews, and analyze the results.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -55,7 +55,7 @@ export function NewProjectForm() {
             <Textarea
               id="idea_description"
               name="idea_description"
-              placeholder="Describe your startup idea in a few sentences. What problem does it solve? Who is it for? This will be used to generate a working prototype."
+              placeholder="Describe your startup idea in a few sentences. What problem does it solve? Who is it for?"
               rows={5}
               required
             />
