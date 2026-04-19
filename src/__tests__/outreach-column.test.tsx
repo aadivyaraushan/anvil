@@ -47,6 +47,7 @@ const baseProject: Project = {
   outreach_status: "idle",
   outreach_progress: 0,
   analyst_status: "idle",
+  archetypes_verified: false,
   created_at: new Date().toISOString(),
 };
 
@@ -86,6 +87,7 @@ describe("OutreachColumn", () => {
       {
         id: "c1",
         project_id: "proj-1",
+        persona_id: null,
         source: "apollo",
         first_name: "Sarah",
         last_name: "Chen",
