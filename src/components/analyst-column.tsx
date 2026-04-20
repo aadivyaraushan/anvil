@@ -4,7 +4,11 @@ import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import type { AnalystDocument, AnalystStatus } from "@/lib/supabase/types";
+import type {
+  AnalystDocument,
+  AnalystStatus,
+  Persona,
+} from "@/lib/supabase/types";
 
 type PainPoint = {
   description: string;
@@ -19,11 +23,25 @@ type Pattern = {
   interviewIds: string[];
 };
 
+type PersonaInsight = {
+  personaId: string;
+  personaName: string;
+  summary: string;
+  painPoints: PainPoint[];
+  customerLanguage: string[];
+  keyQuotes: Array<{ quote: string; contact_id: string; interview_id: string }>;
+  saturationScore: number;
+  interviewCount: number;
+  prospectCount: number;
+  recommendations: string[];
+};
+
 type Props = {
   projectId: string;
   initialDocument: AnalystDocument | null;
   initialAnalystStatus: AnalystStatus;
   completedInterviewCount: number;
+  personas: Persona[];
 };
 
 function severityClass(severity: string): string {
@@ -37,10 +55,12 @@ export function AnalystColumn({
   initialDocument,
   initialAnalystStatus,
   completedInterviewCount,
+  personas,
 }: Props) {
   const [document, setDocument] = useState<AnalystDocument | null>(initialDocument);
   const [status, setStatus] = useState<AnalystStatus>(initialAnalystStatus);
   const [triggering, setTriggering] = useState(false);
+  const [selectedPersonaId, setSelectedPersonaId] = useState("overview");
 
   useEffect(() => {
     const supabase = createClient();
@@ -96,9 +116,23 @@ export function AnalystColumn({
   const painPoints = (document?.pain_points ?? []) as PainPoint[];
   const patterns = (document?.patterns ?? []) as Pattern[];
   const keyQuotes = document?.key_quotes ?? [];
-  const summary = (document?.content as { summary?: string })?.summary;
+  const content = (document?.content ?? {}) as {
+    summary?: string;
+    recommendations?: string[];
+    customerLanguage?: string[];
+    personas?: PersonaInsight[];
+  };
+  const summary = content.summary;
+  const customerLanguage = content.customerLanguage ?? [];
+  const recommendations = content.recommendations ?? [];
+  const personaInsights = content.personas ?? [];
   const isGenerating = status === "generating";
   const hasData = document !== null && document.interview_count > 0;
+  const activePersona =
+    selectedPersonaId === "overview"
+      ? null
+      : personaInsights.find((persona) => persona.personaId === selectedPersonaId) ??
+        null;
 
   return (
     <div className="flex flex-col gap-4 p-4 overflow-auto h-full">
@@ -140,6 +174,133 @@ export function AnalystColumn({
 
       {hasData && !isGenerating && (
         <div className="space-y-5">
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant={selectedPersonaId === "overview" ? "default" : "outline"}
+              className="text-xs"
+              onClick={() => setSelectedPersonaId("overview")}
+            >
+              Overview
+            </Button>
+            {personas.map((persona) => (
+              <Button
+                key={persona.id}
+                size="sm"
+                variant={selectedPersonaId === persona.id ? "default" : "outline"}
+                className="text-xs"
+                onClick={() => setSelectedPersonaId(persona.id)}
+              >
+                {persona.name}
+              </Button>
+            ))}
+          </div>
+
+          {activePersona ? (
+            <div className="space-y-5">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="rounded bg-accent/40 p-2 text-center">
+                  <p className="text-base font-semibold">{activePersona.prospectCount}</p>
+                  <p className="text-xs text-muted-foreground">Matched prospects</p>
+                </div>
+                <div className="rounded bg-accent/40 p-2 text-center">
+                  <p className="text-base font-semibold">{activePersona.interviewCount}</p>
+                  <p className="text-xs text-muted-foreground">Interviews</p>
+                </div>
+                <div className="rounded bg-accent/40 p-2 text-center">
+                  <p className="text-base font-semibold">{activePersona.saturationScore}%</p>
+                  <p className="text-xs text-muted-foreground">Saturation</p>
+                </div>
+              </div>
+
+              <section>
+                <h3 className="mb-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  Archetype Summary
+                </h3>
+                <p className="text-xs leading-relaxed">{activePersona.summary}</p>
+              </section>
+
+              {activePersona.painPoints.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Validated Pain Points
+                  </h3>
+                  <div className="space-y-2">
+                    {[...activePersona.painPoints]
+                      .sort((a, b) => b.frequency - a.frequency)
+                      .map((painPoint, index) => (
+                        <div
+                          key={index}
+                          className="rounded border border-border bg-card/50 p-2 text-xs"
+                        >
+                          <div className="mb-1 flex items-center gap-2">
+                            <Badge
+                              variant="outline"
+                              className={`text-xs ${severityClass(painPoint.severity)}`}
+                            >
+                              {painPoint.severity}
+                            </Badge>
+                            <span className="text-muted-foreground">
+                              {painPoint.frequency} interviews
+                            </span>
+                          </div>
+                          <p>{painPoint.description}</p>
+                        </div>
+                      ))}
+                  </div>
+                </section>
+              )}
+
+              {activePersona.customerLanguage.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Customer Language
+                  </h3>
+                  <div className="flex flex-wrap gap-2">
+                    {activePersona.customerLanguage.map((phrase, index) => (
+                      <Badge key={index} variant="secondary" className="text-[10px]">
+                        {phrase}
+                      </Badge>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {activePersona.keyQuotes.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Quote Library
+                  </h3>
+                  <div className="space-y-2">
+                    {activePersona.keyQuotes.map((quote, index) => (
+                      <blockquote
+                        key={index}
+                        className="border-l-2 border-primary/50 pl-3 text-xs italic text-muted-foreground"
+                      >
+                        &ldquo;{quote.quote}&rdquo;
+                      </blockquote>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {activePersona.recommendations.length > 0 && (
+                <section>
+                  <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Recommended Next Moves
+                  </h3>
+                  <div className="space-y-2">
+                    {activePersona.recommendations.map((recommendation, index) => (
+                      <p key={index} className="text-xs text-muted-foreground">
+                        {recommendation}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-5">
           <div className="grid grid-cols-3 gap-2">
             <div className="rounded bg-accent/40 p-2 text-center">
               <p className="text-base font-semibold">{document.saturation_score}%</p>
@@ -161,6 +322,21 @@ export function AnalystColumn({
                 Summary
               </h3>
               <p className="text-xs leading-relaxed">{summary}</p>
+            </section>
+          )}
+
+          {customerLanguage.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Customer Language
+              </h3>
+              <div className="flex flex-wrap gap-2">
+                {customerLanguage.map((phrase, index) => (
+                  <Badge key={index} variant="secondary" className="text-[10px]">
+                    {phrase}
+                  </Badge>
+                ))}
+              </div>
             </section>
           )}
 
@@ -235,6 +411,23 @@ export function AnalystColumn({
                 ))}
               </div>
             </section>
+          )}
+
+          {recommendations.length > 0 && (
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Recommendations
+              </h3>
+              <div className="space-y-2">
+                {recommendations.map((recommendation, index) => (
+                  <p key={index} className="text-xs text-muted-foreground">
+                    {recommendation}
+                  </p>
+                ))}
+              </div>
+            </section>
+          )}
+            </div>
           )}
         </div>
       )}

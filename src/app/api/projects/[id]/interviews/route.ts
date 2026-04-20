@@ -34,6 +34,7 @@ export async function POST(
 
   const body = await req.json() as {
     contact_id: string | null;
+    persona_id: string | null;
     meeting_platform: MeetingPlatform;
     meeting_link: string;
     scheduled_at: string;
@@ -44,6 +45,7 @@ export async function POST(
     .insert({
       project_id: id,
       contact_id: body.contact_id,
+      persona_id: body.persona_id,
       meeting_platform: body.meeting_platform,
       meeting_link: body.meeting_link,
       scheduled_at: body.scheduled_at,

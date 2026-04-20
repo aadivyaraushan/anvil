@@ -1,6 +1,18 @@
 import { test, expect } from "@playwright/test";
 import { getUserIdByEmail, cleanupProjectsForUser } from "./helpers/db";
 
+let testUserId: string;
+
+test.beforeAll(async () => {
+  const id = await getUserIdByEmail(process.env.E2E_TEST_EMAIL!);
+  if (!id) throw new Error("E2E test user not found");
+  testUserId = id;
+});
+
+test.afterEach(async () => {
+  await cleanupProjectsForUser(testUserId);
+});
+
 test.describe("dashboard", () => {
   test("shows dashboard heading and New project button", async ({ page }) => {
     await page.goto("/dashboard");
@@ -34,7 +46,24 @@ test.describe("dashboard", () => {
     ).toBeVisible();
   });
 
-  test("submitting the form redirects to /project/:id", async ({ page }) => {
+  test("submitting the form redirects to archetype setup", async ({ page }) => {
+    await page.route("**/api/projects/*/generate-archetypes", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          archetypes: [
+            {
+              name: "Finance leader",
+              description: "Owns budget and tooling decisions.",
+              job_titles: ["Head of Finance"],
+              pain_points: ["Reporting is manual"],
+            },
+          ],
+        }),
+      });
+    });
+
     await page.goto("/dashboard/new");
 
     await page.locator('input[name="name"]').fill("E2E Playwright Test Project");
@@ -47,12 +76,13 @@ test.describe("dashboard", () => {
 
     await page.getByRole("button", { name: "Create project" }).click();
 
-    // Server Action calls redirect() → browser lands on /project/<uuid>
-    await page.waitForURL(/\/project\/[0-9a-f-]{36}/, { timeout: 20_000 });
-    expect(page.url()).toMatch(/\/project\/[0-9a-f-]{36}/);
-
-    // Cleanup: remove the test project
-    const userId = await getUserIdByEmail(process.env.E2E_TEST_EMAIL!);
-    if (userId) await cleanupProjectsForUser(userId);
+    await page.waitForURL(/\/project\/[0-9a-f-]{36}\/archetypes/, {
+      timeout: 20_000,
+    });
+    expect(page.url()).toMatch(/\/project\/[0-9a-f-]{36}\/archetypes/);
+    await expect(
+      page.getByRole("heading", { name: "Who are your customers?" })
+    ).toBeVisible();
+    await expect(page.locator('input[value="Finance leader"]')).toBeVisible();
   });
 });

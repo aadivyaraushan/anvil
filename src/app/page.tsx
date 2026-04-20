@@ -31,11 +31,12 @@ export default function LandingPage() {
             WebkitTextFillColor: "transparent",
           }}
         >
-          Customer discovery on autopilot
+          Customer intelligence without the spreadsheet sprawl
         </h1>
         <p className="mt-5 max-w-xl text-[17px] leading-relaxed text-muted-foreground">
-          Three AI agents find candidates, assist live interviews, and
-          synthesize insights. One workspace, three parallel workflows.
+          Import founder-owned social exports, score them against archetypes,
+          run sharper interviews, and turn raw conversations into evidence you
+          can actually use.
         </p>
         <div className="mt-8 flex gap-3">
           <Link href="/signup">
@@ -63,7 +64,7 @@ export default function LandingPage() {
               <div className="h-3 w-3 rounded-full bg-[#3f3f46]" />
             </div>
             <div className="ml-4 flex-1 rounded-md bg-background px-3 py-1 text-center text-xs text-muted-foreground font-mono">
-              app.useanvil.com/project/fintech-discovery
+              app.useanvil.com/project/finops-research
             </div>
           </div>
 
@@ -159,7 +160,7 @@ export default function LandingPage() {
               </div>
               <div className="rounded-lg bg-card p-3 border border-border">
                 <span className="text-[10px] font-medium text-foreground">
-                  Top pain point
+                  Validated pain point
                 </span>
                 <p className="mt-1 text-[10px] text-muted-foreground">
                   Manual reconciliation across multiple banking platforms
@@ -211,12 +212,12 @@ export default function LandingPage() {
             {
               step: 2,
               title: "Run interviews",
-              desc: "AI copilot joins calls, transcribes, suggests questions.",
+              desc: "The interview agent records evidence, keeps transcripts tidy, and tags what matters.",
             },
             {
               step: 3,
-              title: "Get insights",
-              desc: "Living research document auto-updates after each interview.",
+              title: "See the evidence",
+              desc: "The analyst organizes pain points, quotes, and recurring language by archetype.",
             },
           ].map(({ step, title, desc }) => (
             <div key={step} className="flex flex-col items-center text-center">

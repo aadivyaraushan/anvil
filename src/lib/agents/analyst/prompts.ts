@@ -45,11 +45,13 @@ export type ProjectContext = {
 export type ExtractionInput = {
   interviewId: string;
   contactId: string;
+  personaId: string | null;
   contactName: string;
   contactTitle: string;
   company: string;
   painPoints: Array<{ description: string; severity: string; quote: string }>;
   topics: string[];
+  customerLanguage: string[];
   keyQuote: string;
 };
 
@@ -81,19 +83,22 @@ Extract insights from this interview. Output ONLY valid JSON (no markdown, no ex
     { "description": "specific pain point in one sentence", "severity": "high" | "medium" | "low", "quote": "verbatim quote from transcript" }
   ],
   "topics": ["topic keyword"],
+  "customerLanguage": ["short verbatim phrase from the transcript"],
   "keyQuote": "single most impactful verbatim quote from this interview"
 }
 
 Rules:
 - Only include pain points actually stated in the transcript — do not infer
 - Quotes must be exact words from the transcript
-- Maximum 5 pain points, 8 topic keywords
-- If the transcript is empty or too short, return {"painPoints":[],"topics":[],"keyQuote":""}`;
+- customerLanguage phrases should be 2-8 words and verbatim
+- Maximum 5 pain points, 8 topic keywords, 5 customerLanguage phrases
+- If the transcript is empty or too short, return {"painPoints":[],"topics":[],"customerLanguage":[],"keyQuote":""}`;
 }
 
 export function buildSynthesizerPrompt(
   extractions: ExtractionInput[],
-  projectContext: { ideaDescription: string; targetProfile: string; projectName: string }
+  projectContext: { ideaDescription: string; targetProfile: string; projectName: string },
+  segmentContext?: { name: string; description?: string }
 ): string {
   const extractionText = extractions
     .map(
@@ -103,6 +108,7 @@ interviewId: ${e.interviewId}
 contactId: ${e.contactId}
 painPoints: ${JSON.stringify(e.painPoints)}
 topics: ${e.topics.join(", ")}
+customerLanguage: ${JSON.stringify(e.customerLanguage)}
 keyQuote: "${e.keyQuote}"`
     )
     .join("\n\n");
@@ -112,6 +118,7 @@ keyQuote: "${e.keyQuote}"`
 ## Project: ${projectContext.projectName}
 Idea: ${projectContext.ideaDescription}
 Target users: ${projectContext.targetProfile}
+${segmentContext ? `Segment: ${segmentContext.name}\nSegment description: ${segmentContext.description ?? "n/a"}` : ""}
 
 ## Interview Extractions
 ${extractionText}
@@ -137,6 +144,7 @@ Synthesize these interviews into consolidated insights. Output ONLY valid JSON (
   "keyQuotes": [
     { "quote": "verbatim quote", "contact_id": "...", "interview_id": "..." }
   ],
+  "customerLanguage": ["recurring verbatim phrase"],
   "saturationScore": <0-100>,
   "uniquePatternCount": <number>,
   "recommendations": ["specific actionable recommendation"]
@@ -146,6 +154,7 @@ Rules:
 - Maximum 8 pain points (consolidate similar ones)
 - Maximum 6 patterns
 - Maximum 5 key quotes (most impactful)
+- Maximum 8 customerLanguage phrases
 - saturationScore: 100 = same themes heard repeatedly across all interviews, 0 = completely new themes in each interview
 - Recommendations must be specific product or research actions`;
 }

@@ -1,12 +1,21 @@
-import { getProject, getAnalystDocument } from "@/lib/actions/projects";
+import {
+  getProject,
+  getAnalystDocument,
+  getPersonas,
+} from "@/lib/actions/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { OutreachColumn } from "@/components/outreach-column";
 import { InterviewColumn } from "@/components/interview-column";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import type { Contact, Interview, AnalystDocument } from "@/lib/supabase/types";
+import { notFound, redirect } from "next/navigation";
+import type {
+  Contact,
+  Interview,
+  AnalystDocument,
+  Persona,
+} from "@/lib/supabase/types";
 import { AnalystColumn } from "@/components/analyst-column";
 
 export default async function ProjectPage({
@@ -22,12 +31,18 @@ export default async function ProjectPage({
     notFound();
   }
 
+  if (!project.archetypes_verified) {
+    redirect(`/project/${id}/archetypes`);
+  }
+
   const supabase = await createServerSupabaseClient();
+  const personas = (await getPersonas(id)) as Persona[];
   const { data: contactData } = await supabase
     .from("contacts")
     .select("*")
     .eq("project_id", id)
-    .order("created_at", { ascending: true });
+    .order("company", { ascending: true })
+    .order("first_name", { ascending: true });
   const initialContacts = (contactData as Contact[]) ?? [];
 
   const { data: interviewData } = await supabase
@@ -56,11 +71,23 @@ export default async function ProjectPage({
             <h1 className="text-lg font-semibold">{project.name}</h1>
           </div>
         </div>
-        <Link href={`/project/${id}/settings`}>
-          <Button variant="ghost" size="sm">
-            Settings
-          </Button>
-        </Link>
+        <div className="flex items-center gap-2">
+          {personas.slice(0, 3).map((persona) => (
+            <Badge key={persona.id} variant="outline" className="text-[10px]">
+              {persona.name}
+            </Badge>
+          ))}
+          <Link href={`/project/${id}/archetypes`}>
+            <Button variant="ghost" size="sm">
+              Archetypes
+            </Button>
+          </Link>
+          <Link href={`/project/${id}/settings`}>
+            <Button variant="ghost" size="sm">
+              Settings
+            </Button>
+          </Link>
+        </div>
       </div>
 
       <div className="grid flex-1 grid-cols-3 divide-x divide-[#1a1a1e] overflow-hidden">
@@ -71,7 +98,11 @@ export default async function ProjectPage({
               Agent 1
             </Badge>
           </div>
-          <OutreachColumn project={project} initialContacts={initialContacts} />
+          <OutreachColumn
+            project={project}
+            initialContacts={initialContacts}
+            personas={personas}
+          />
         </div>
 
         <div className="flex flex-col overflow-hidden">
@@ -81,7 +112,11 @@ export default async function ProjectPage({
               Agent 2
             </Badge>
           </div>
-          <InterviewColumn projectId={id} initialInterviews={initialInterviews} />
+          <InterviewColumn
+            projectId={id}
+            initialInterviews={initialInterviews}
+            personas={personas}
+          />
         </div>
 
         <div className="flex flex-col overflow-hidden">
@@ -96,6 +131,7 @@ export default async function ProjectPage({
             initialDocument={analystDocument}
             initialAnalystStatus={project.analyst_status}
             completedInterviewCount={completedInterviewCount}
+            personas={personas}
           />
         </div>
       </div>

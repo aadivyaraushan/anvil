@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let _adminClient: SupabaseClient | null = null;
+let _supportsRedesignSchema: boolean | null = null;
 
 function adminClient(): SupabaseClient {
   if (_adminClient) return _adminClient;
@@ -21,6 +22,23 @@ export async function getUserIdByEmail(email: string): Promise<string | null> {
   const supabase = adminClient();
   const { data } = await supabase.auth.admin.listUsers({ perPage: 1000 });
   return data?.users.find((u) => u.email === email)?.id ?? null;
+}
+
+export async function supportsRedesignSchema(): Promise<boolean> {
+  if (_supportsRedesignSchema !== null) return _supportsRedesignSchema;
+
+  const supabase = adminClient();
+  const projectProbe = await supabase
+    .from("projects")
+    .select("id, archetypes_verified")
+    .limit(1);
+  const personaProbe = await supabase.from("personas").select("id").limit(1);
+
+  _supportsRedesignSchema =
+    !projectProbe.error &&
+    !personaProbe.error;
+
+  return _supportsRedesignSchema;
 }
 
 export async function deleteUser(userId: string): Promise<void> {
@@ -45,6 +63,7 @@ export async function seedProject(opts: {
   ideaDescription?: string;
   targetProfile?: string;
   analystStatus?: "idle" | "generating" | "complete" | "failed";
+  archetypesVerified?: boolean;
 }): Promise<string> {
   const supabase = adminClient();
   const { data, error } = await supabase
@@ -56,6 +75,9 @@ export async function seedProject(opts: {
         opts.ideaDescription ?? "A test idea for E2E testing.",
       target_profile: opts.targetProfile ?? "QA engineers",
       ...(opts.analystStatus ? { analyst_status: opts.analystStatus } : {}),
+      ...(typeof opts.archetypesVerified === "boolean"
+        ? { archetypes_verified: opts.archetypesVerified }
+        : {}),
     })
     .select("id")
     .single();
@@ -63,8 +85,49 @@ export async function seedProject(opts: {
   return (data as { id: string }).id;
 }
 
+export async function seedPersona(opts: {
+  projectId: string;
+  name?: string;
+  description?: string;
+  jobTitles?: string[];
+  painPoints?: string[];
+}): Promise<string> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("personas")
+    .insert({
+      project_id: opts.projectId,
+      name: opts.name ?? "Finance leader",
+      description:
+        opts.description ?? "Leads customer research and buying decisions.",
+      job_titles: opts.jobTitles ?? ["Head of Finance"],
+      pain_points: opts.painPoints ?? ["Manual reporting takes too long"],
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedPersona failed: ${error.message}`);
+
+  const { error: projectError } = await supabase
+    .from("projects")
+    .update({ archetypes_verified: true })
+    .eq("id", opts.projectId);
+  if (projectError) {
+    throw new Error(`seedPersona(project update) failed: ${projectError.message}`);
+  }
+
+  return (data as { id: string }).id;
+}
+
 export async function seedContact(opts: {
   projectId: string;
+  personaId?: string | null;
+  source?: "apollo" | "csv" | "json";
+  sourcePayload?: Record<string, unknown> | null;
+  fitScore?: number | null;
+  fitStatus?: "passed" | "skipped" | null;
+  outreachStatus?: "pending" | "drafted" | "approved" | "sent" | "replied";
+  emailDraft?: string | null;
+  researchBrief?: Record<string, unknown> | null;
   firstName?: string;
   lastName?: string;
   email?: string;
@@ -76,7 +139,8 @@ export async function seedContact(opts: {
     .from("contacts")
     .insert({
       project_id: opts.projectId,
-      source: "apollo",
+      persona_id: opts.personaId ?? null,
+      source: opts.source ?? "csv",
       first_name: opts.firstName ?? "Test",
       last_name: opts.lastName ?? "Contact",
       email: opts.email ?? `contact-${Date.now()}@example.com`,
@@ -86,7 +150,12 @@ export async function seedContact(opts: {
       company_website: "",
       industry: "Software",
       location: "Remote",
-      outreach_status: "pending",
+      research_brief: opts.researchBrief ?? null,
+      fit_score: opts.fitScore ?? null,
+      fit_status: opts.fitStatus ?? null,
+      outreach_status: opts.outreachStatus ?? "pending",
+      email_draft: opts.emailDraft ?? null,
+      source_payload: opts.sourcePayload ?? null,
     })
     .select("id")
     .single();
@@ -97,7 +166,10 @@ export async function seedContact(opts: {
 export async function seedInterview(opts: {
   projectId: string;
   contactId?: string;
+  personaId?: string | null;
   status?: "scheduled" | "live" | "completed";
+  transcript?: Array<{ speaker: string; text: string; timestamp: number }>;
+  suggestedQuestions?: string[];
 }): Promise<string> {
   const supabase = adminClient();
   const { data, error } = await supabase
@@ -105,17 +177,44 @@ export async function seedInterview(opts: {
     .insert({
       project_id: opts.projectId,
       contact_id: opts.contactId ?? null,
+      persona_id: opts.personaId ?? null,
       meeting_platform: "zoom",
       meeting_link: "https://zoom.us/j/test",
       scheduled_at: new Date().toISOString(),
       status: opts.status ?? "scheduled",
-      transcript: [],
-      suggested_questions: [],
+      transcript: opts.transcript ?? [],
+      suggested_questions: opts.suggestedQuestions ?? [],
     })
     .select("id")
     .single();
   if (error) throw new Error(`seedInterview failed: ${error.message}`);
   return (data as { id: string }).id;
+}
+
+export async function seedAnalystDocument(opts: {
+  projectId: string;
+  content?: Record<string, unknown>;
+  painPoints?: Array<Record<string, unknown>>;
+  patterns?: Array<Record<string, unknown>>;
+  keyQuotes?: Array<Record<string, unknown>>;
+  saturationScore?: number;
+  interviewCount?: number;
+  uniquePatternCount?: number;
+}): Promise<void> {
+  const supabase = adminClient();
+  const { error } = await supabase
+    .from("analyst_documents")
+    .update({
+      content: opts.content ?? {},
+      pain_points: opts.painPoints ?? [],
+      patterns: opts.patterns ?? [],
+      key_quotes: opts.keyQuotes ?? [],
+      saturation_score: opts.saturationScore ?? 0,
+      interview_count: opts.interviewCount ?? 0,
+      unique_pattern_count: opts.uniquePatternCount ?? 0,
+    })
+    .eq("project_id", opts.projectId);
+  if (error) throw new Error(`seedAnalystDocument failed: ${error.message}`);
 }
 
 export async function upsertSubscription(opts: {

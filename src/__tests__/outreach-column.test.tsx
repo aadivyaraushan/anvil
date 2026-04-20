@@ -1,6 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import type { Contact, Project } from "@/lib/supabase/types";
+import type { Contact, Persona, Project } from "@/lib/supabase/types";
 
 vi.mock("@/lib/supabase/client", () => ({
   createClient: vi.fn().mockReturnValue({
@@ -47,15 +47,33 @@ const baseProject: Project = {
   outreach_status: "idle",
   outreach_progress: 0,
   analyst_status: "idle",
-  archetypes_verified: false,
+  archetypes_verified: true,
   created_at: new Date().toISOString(),
 };
 
+const personas: Persona[] = [
+  {
+    id: "persona-1",
+    project_id: "proj-1",
+    name: "Finance leader",
+    description: "Owns close and reporting",
+    job_titles: ["CFO"],
+    pain_points: ["Manual close"],
+    created_at: new Date().toISOString(),
+  },
+];
+
 describe("OutreachColumn", () => {
-  it("shows Run Outreach button when idle", async () => {
+  it("shows Score Imported Profiles button when idle", async () => {
     const { OutreachColumn } = await import("@/components/outreach-column");
-    render(<OutreachColumn project={baseProject} initialContacts={[]} />);
-    expect(screen.getByText("Run Outreach")).toBeDefined();
+    render(
+      <OutreachColumn
+        project={baseProject}
+        initialContacts={[]}
+        personas={personas}
+      />
+    );
+    expect(screen.getByText("Score Imported Profiles")).toBeDefined();
   });
 
   it("shows running state with progress", async () => {
@@ -64,6 +82,7 @@ describe("OutreachColumn", () => {
       <OutreachColumn
         project={{ ...baseProject, outreach_status: "running", outreach_progress: 5 }}
         initialContacts={[]}
+        personas={personas}
       />
     );
     expect(screen.getByText(/Processing/)).toBeDefined();
@@ -76,19 +95,20 @@ describe("OutreachColumn", () => {
       <OutreachColumn
         project={{ ...baseProject, outreach_status: "partial", outreach_progress: 10 }}
         initialContacts={[]}
+        personas={personas}
       />
     );
     expect(screen.getByText("Continue Outreach")).toBeDefined();
   });
 
-  it("shows contact cards with fit badges", async () => {
+  it("shows contact cards with fit badges and archetypes", async () => {
     const { OutreachColumn } = await import("@/components/outreach-column");
     const contacts: Contact[] = [
       {
         id: "c1",
         project_id: "proj-1",
-        persona_id: null,
-        source: "apollo",
+        persona_id: "persona-1",
+        source: "csv",
         first_name: "Sarah",
         last_name: "Chen",
         email: "sarah@finflow.com",
@@ -98,23 +118,25 @@ describe("OutreachColumn", () => {
         company_website: "",
         industry: "fintech",
         location: "San Francisco",
-        research_brief: null,
+        research_brief: { fit_rationale: "High alignment with finance workflows." },
         fit_score: 85,
         fit_status: "passed",
         outreach_status: "sent",
         email_draft: "Hi Sarah...",
         email_sent_at: null,
-        apollo_data: null,
+        source_payload: null,
       },
     ];
     render(
       <OutreachColumn
         project={{ ...baseProject, outreach_status: "complete", outreach_progress: 1 }}
         initialContacts={contacts}
+        personas={personas}
       />
     );
     expect(screen.getByText("Sarah Chen")).toBeDefined();
     expect(screen.getByText("85")).toBeDefined();
     expect(screen.getByText(/Sent/i)).toBeDefined();
+    expect(screen.getByText(/Finance leader/i)).toBeDefined();
   });
 });

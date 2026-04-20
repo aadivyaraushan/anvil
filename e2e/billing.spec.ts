@@ -47,14 +47,6 @@ test.describe("billing page", () => {
 
     await page.goto("/billing");
 
-    // Intercept the navigation to the Stripe URL (don't actually navigate)
-    let checkoutUrl = "";
-    page.on("request", (req) => {
-      if (req.url().includes("checkout.stripe.com")) {
-        checkoutUrl = req.url();
-      }
-    });
-
     // Capture the POST body to verify plan is sent correctly
     let requestBody: Record<string, unknown> = {};
     await page.route("**/api/stripe/checkout", async (route) => {
@@ -87,14 +79,13 @@ test.describe("billing page", () => {
 
 test.describe("billing — plan limit enforcement", () => {
   let userId: string;
-  let seededProjectId: string;
 
   test.beforeAll(async () => {
     userId = await getUserIdByEmail(process.env.E2E_TEST_EMAIL!);
     if (!userId) throw new Error("E2E test user not found");
     await upsertSubscription({ userId, plan: "free" });
     // Seed 1 project to hit the free plan limit (limit = 1)
-    seededProjectId = await seedProject({ userId });
+    await seedProject({ userId });
   });
 
   test.afterAll(async () => {

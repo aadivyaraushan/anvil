@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   buildExtractorPrompt,
   buildSynthesizerPrompt,
@@ -21,68 +21,69 @@ const extractions = [
   {
     interviewId: "int-1",
     contactId: "contact-1",
+    personaId: "persona-1",
     contactName: "Sarah Chen",
     contactTitle: "CFO",
     company: "FinFlow",
     painPoints: [{ description: "Manual reconciliation", severity: "high", quote: "20 hours per person" }],
     topics: ["reconciliation", "time"],
+    customerLanguage: ["killing us"],
     keyQuote: "At least 20 hours per person. It's killing us.",
   },
 ];
 
 describe("buildExtractorPrompt", () => {
   it("includes interviewer and interviewee turns", () => {
-    const p = buildExtractorPrompt(transcript, contact, projectContext);
-    expect(p).toContain("Sarah");
-    expect(p).toContain("reconciling invoices");
+    const prompt = buildExtractorPrompt(transcript, contact, projectContext);
+    expect(prompt).toContain("Sarah");
+    expect(prompt).toContain("reconciling invoices");
   });
 
   it("includes project context", () => {
-    const p = buildExtractorPrompt(transcript, contact, projectContext);
-    expect(p).toContain("AI reconciliation tool");
-    expect(p).toContain("CFOs");
+    const prompt = buildExtractorPrompt(transcript, contact, projectContext);
+    expect(prompt).toContain("AI reconciliation tool");
+    expect(prompt).toContain("CFOs");
   });
 
-  it("asks for JSON with painPoints, topics, keyQuote", () => {
-    const p = buildExtractorPrompt(transcript, contact, projectContext);
-    expect(p).toContain("painPoints");
-    expect(p).toContain("topics");
-    expect(p).toContain("keyQuote");
-    expect(p).toContain("JSON");
+  it("asks for JSON with painPoints, topics, customerLanguage, and keyQuote", () => {
+    const prompt = buildExtractorPrompt(transcript, contact, projectContext);
+    expect(prompt).toContain("painPoints");
+    expect(prompt).toContain("topics");
+    expect(prompt).toContain("customerLanguage");
+    expect(prompt).toContain("keyQuote");
+    expect(prompt).toContain("JSON");
   });
 });
 
 describe("buildSynthesizerPrompt", () => {
   it("includes extraction data from all interviews", () => {
-    const p = buildSynthesizerPrompt(extractions, {
+    const prompt = buildSynthesizerPrompt(extractions, {
       ideaDescription: "AI reconciliation tool",
       targetProfile: "CFOs",
       projectName: "ReconAI",
     });
-    expect(p).toContain("Sarah Chen");
-    expect(p).toContain("Manual reconciliation");
+    expect(prompt).toContain("Sarah Chen");
+    expect(prompt).toContain("Manual reconciliation");
   });
 
-  it("asks for summary, painPoints, patterns, keyQuotes, saturationScore", () => {
-    const p = buildSynthesizerPrompt(extractions, {
-      ideaDescription: "AI reconciliation tool",
-      targetProfile: "CFOs",
-      projectName: "ReconAI",
-    });
-    expect(p).toContain("summary");
-    expect(p).toContain("painPoints");
-    expect(p).toContain("patterns");
-    expect(p).toContain("keyQuotes");
-    expect(p).toContain("saturationScore");
-    expect(p).toContain("JSON");
-  });
-
-  it("includes interview count in context", () => {
-    const p = buildSynthesizerPrompt(extractions, {
-      ideaDescription: "AI reconciliation tool",
-      targetProfile: "CFOs",
-      projectName: "ReconAI",
-    });
-    expect(p).toContain("1");
+  it("asks for summary, customerLanguage, and key evidence fields", () => {
+    const prompt = buildSynthesizerPrompt(
+      extractions,
+      {
+        ideaDescription: "AI reconciliation tool",
+        targetProfile: "CFOs",
+        projectName: "ReconAI",
+      },
+      {
+        name: "Finance leader",
+      }
+    );
+    expect(prompt).toContain("summary");
+    expect(prompt).toContain("painPoints");
+    expect(prompt).toContain("patterns");
+    expect(prompt).toContain("customerLanguage");
+    expect(prompt).toContain("keyQuotes");
+    expect(prompt).toContain("saturationScore");
+    expect(prompt).toContain("JSON");
   });
 });

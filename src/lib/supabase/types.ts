@@ -1,5 +1,5 @@
 export type OutreachAgentStatus = "idle" | "running" | "partial" | "complete";
-export type ContactSource = "apollo" | "csv";
+export type ContactSource = "apollo" | "csv" | "json";
 export type FitStatus = "passed" | "skipped";
 export type OutreachStatus =
   | "pending"
@@ -45,7 +45,7 @@ export type Contact = {
   outreach_status: OutreachStatus;
   email_draft: string | null;
   email_sent_at: string | null;
-  apollo_data: Record<string, unknown> | null;
+  source_payload: Record<string, unknown> | null;
 };
 
 export type Interview = {
@@ -104,7 +104,6 @@ export type UserSettings = {
   sender_email: string;
   sender_name: string;
   resend_api_key: string;
-  apollo_api_key: string;
   auto_send_enabled: boolean;
   review_before_send: boolean;
 };

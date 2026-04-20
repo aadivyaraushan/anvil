@@ -32,7 +32,6 @@ export function ArchetypeSetup({ project }: { project: Project }) {
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setLoadStatus("loading");
     fetch(`/api/projects/${project.id}/generate-archetypes`)
       .then((r) => r.json())
       .then(({ archetypes: raw }) => {
@@ -73,7 +72,12 @@ export function ArchetypeSetup({ project }: { project: Project }) {
     startTransition(async () => {
       await saveArchetypes(
         project.id,
-        archetypes.map(({ tempId: _t, ...rest }) => rest)
+        archetypes.map((archetype) => ({
+          name: archetype.name,
+          description: archetype.description,
+          job_titles: archetype.job_titles,
+          pain_points: archetype.pain_points,
+        }))
       );
     });
   }
@@ -102,7 +106,10 @@ export function ArchetypeSetup({ project }: { project: Project }) {
         <Button
           variant="secondary"
           size="sm"
-          onClick={() => setRetryCount((c) => c + 1)}
+          onClick={() => {
+            setLoadStatus("loading");
+            setRetryCount((c) => c + 1);
+          }}
         >
           Retry
         </Button>

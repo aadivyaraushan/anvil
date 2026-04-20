@@ -32,8 +32,9 @@ export function NewProjectForm() {
       <CardHeader>
         <CardTitle>Create a new project</CardTitle>
         <CardDescription>
-          Describe your startup idea and who you want to talk to. Anvil will
-          find candidates, help you run interviews, and analyze the results.
+          Describe your startup idea and target customer. Anvil will propose
+          archetypes, score imported profiles, support interviews, and organize
+          the evidence.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -43,7 +44,7 @@ export function NewProjectForm() {
             <Input
               id="name"
               name="name"
-              placeholder="e.g. Anvil Customer Discovery"
+              placeholder="e.g. Fintech research sprint"
               required
             />
           </div>
@@ -68,7 +69,7 @@ export function NewProjectForm() {
             <Textarea
               id="target_profile"
               name="target_profile"
-              placeholder="Describe your ideal interview candidate. e.g. 'Series A founders in fintech who have done customer discovery before' or 'Product managers at B2B SaaS companies with 50-200 employees'"
+              placeholder="Describe the customer group you most want to understand. e.g. 'Controllers at vertical SaaS companies with lean finance teams'"
               rows={3}
               required
             />

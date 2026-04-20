@@ -1,10 +1,11 @@
 import { getInterviews } from "@/lib/actions/interviews";
-import { getProject } from "@/lib/actions/projects";
+import { getPersonas, getProject } from "@/lib/actions/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { NewInterviewForm } from "@/components/new-interview-form";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
 export default async function InterviewsPage({
   params,
@@ -21,6 +22,14 @@ export default async function InterviewsPage({
   }
 
   const interviews = await getInterviews(id);
+  const personas = await getPersonas(id);
+  const supabase = await createServerSupabaseClient();
+  const { data: contacts } = await supabase
+    .from("contacts")
+    .select("*")
+    .eq("project_id", id)
+    .order("fit_score", { ascending: false });
+  const personasById = new Map(personas.map((persona) => [persona.id, persona.name]));
 
   return (
     <div className="flex h-full flex-col">
@@ -31,7 +40,11 @@ export default async function InterviewsPage({
           </Link>
           <h1 className="text-lg font-semibold">Interviews — {project.name}</h1>
         </div>
-        <NewInterviewForm projectId={id} />
+        <NewInterviewForm
+          projectId={id}
+          contacts={contacts ?? []}
+          personas={personas}
+        />
       </div>
 
       <div className="flex-1 overflow-auto p-6">
@@ -65,6 +78,11 @@ export default async function InterviewsPage({
                   {interview.transcript.length} transcript chunks &middot;{" "}
                   {interview.suggested_questions.length} suggestions
                 </p>
+                {interview.persona_id && (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {personasById.get(interview.persona_id) ?? "Archetype"}
+                  </p>
+                )}
               </div>
               <div className="flex items-center gap-2">
                 <Badge

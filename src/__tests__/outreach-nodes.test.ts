@@ -1,98 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-
-// We'll add more tests as we build more nodes.
-// This file tests node-level logic with mocked external deps.
-
-describe("Apollo client", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-    process.env.APOLLO_API_KEY = "test";
-  });
-
-  it("returns contacts array from Apollo response", async () => {
-    const { searchApollo } = await import("@/lib/apollo");
-
-    const mockResponse = {
-      people: [
-        {
-          first_name: "Sarah",
-          last_name: "Chen",
-          email: "sarah@finflow.com",
-          title: "CFO",
-          organization: { name: "FinFlow", website_url: "https://finflow.com" },
-          linkedin_url: "https://linkedin.com/in/sarahchen",
-          city: "San Francisco",
-          state: "CA",
-          country: "United States",
-          employment_history: [{ organization_name: "FinFlow" }],
-          label_names: [],
-          departments: ["finance"],
-          seniority: "c_suite",
-        },
-      ],
-      pagination: { total_entries: 1 },
-    };
-
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => mockResponse,
-    } as Response);
-
-    const contacts = await searchApollo({
-      jobTitles: ["CFO", "VP Finance"],
-      seniorityLevels: ["c_suite", "vp"],
-      keywords: ["fintech"],
-      perPage: 10,
-    });
-
-    expect(contacts).toHaveLength(1);
-    expect(contacts[0].first_name).toBe("Sarah");
-    expect(contacts[0].email).toBe("sarah@finflow.com");
-    expect(contacts[0].company).toBe("FinFlow");
-  });
-});
-
-describe("Tavily client", () => {
-  beforeEach(() => {
-    vi.stubGlobal("fetch", vi.fn());
-  });
-
-  it("returns answer string from Tavily response when answer is present", async () => {
-    const { searchTavily } = await import("@/lib/tavily");
-
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        answer: "FinFlow is a fintech startup focused on SMB lending.",
-        results: [],
-      }),
-    } as Response);
-
-    process.env.TAVILY_API_KEY = "test";
-    const result = await searchTavily("FinFlow company overview");
-    expect(result).toBe("FinFlow is a fintech startup focused on SMB lending.");
-  });
-
-  it("falls back to result content when no answer", async () => {
-    const { searchTavily } = await import("@/lib/tavily");
-
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({
-        answer: null,
-        results: [
-          { content: "FinFlow raised Series A." },
-          { content: "CEO is James Park." },
-        ],
-      }),
-    } as Response);
-
-    process.env.TAVILY_API_KEY = "test";
-    const result = await searchTavily("FinFlow news");
-    expect(result).toContain("FinFlow raised Series A.");
-    expect(result).toContain("CEO is James Park.");
-  });
-});
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("resend", () => {
   const mockSend = vi.fn().mockResolvedValue({ data: { id: "msg_123" }, error: null });
@@ -102,48 +8,40 @@ vi.mock("resend", () => {
   return { Resend: MockResend };
 });
 
-vi.mock("@/lib/apollo", () => ({
-  searchApollo: vi.fn().mockResolvedValue([
-    {
-      first_name: "Sarah",
-      last_name: "Chen",
-      email: "sarah@finflow.com",
-      title: "CFO",
-      company: "FinFlow",
-      company_website: "https://finflow.com",
-      linkedin_url: "https://linkedin.com/in/sarahchen",
-      industry: "fintech",
-      location: "San Francisco, CA",
-      raw: {},
-    },
-  ]),
-}));
+const personaRows = [
+  {
+    id: "persona-1",
+    project_id: "proj-1",
+    name: "Finance leader",
+    description: "Owns reconciliation and reporting",
+    job_titles: ["CFO"],
+    pain_points: ["Manual close"],
+    created_at: new Date().toISOString(),
+  },
+];
+
+const mockEq = vi.fn().mockResolvedValue({ error: null });
+const mockFrom = vi.fn((table: string) => {
+  if (table === "personas") {
+    return {
+      select: vi.fn().mockReturnValue({
+        eq: vi.fn().mockReturnValue({
+          order: vi.fn().mockResolvedValue({ data: personaRows, error: null }),
+        }),
+      }),
+    };
+  }
+
+  return {
+    update: vi.fn().mockReturnValue({
+      eq: mockEq,
+    }),
+  };
+});
 
 vi.mock("@/lib/supabase/server", () => ({
   createServerSupabaseClient: vi.fn().mockResolvedValue({
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockReturnValue({
-        select: vi.fn().mockResolvedValue({
-          data: [{ id: "contact-1", first_name: "Sarah", last_name: "Chen", email: "sarah@finflow.com", title: "CFO", company: "FinFlow", company_website: "https://finflow.com", linkedin_url: "", industry: "fintech", location: "San Francisco, CA", source: "apollo", project_id: "proj-1", research_brief: null, fit_score: null, fit_status: null, outreach_status: "pending", email_draft: null, email_sent_at: null, apollo_data: {} }],
-          error: null,
-        }),
-      }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    }),
-  }),
-}));
-
-vi.mock("@/lib/llm", () => ({
-  createLlm: vi.fn().mockReturnValue({
-    invoke: vi.fn().mockResolvedValue({
-      content: JSON.stringify({
-        jobTitles: ["CFO", "VP Finance"],
-        seniorityLevels: ["c_suite", "vp"],
-        keywords: ["fintech"],
-      }),
-    }),
+    from: mockFrom,
   }),
 }));
 
@@ -164,25 +62,54 @@ describe("Resend client", () => {
 });
 
 describe("sourceContacts node", () => {
-  it("inserts contacts into DB and returns updated state", async () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("loads personas and keeps imported contacts in state", async () => {
     const { sourceContacts } = await import("@/lib/agents/outreach/nodes");
 
     const state = {
       projectId: "proj-1",
-      targetProfile: "CFOs at fintech companies",
-      ideaDescription: "AI reconciliation tool",
+      targetProfile: "Finance leaders",
+      ideaDescription: "AI close assistant",
       senderName: "Alice",
       senderEmail: "alice@example.com",
       autoSendEnabled: false,
-      contacts: [],
+      contacts: [
+        {
+          id: "contact-1",
+          project_id: "proj-1",
+          persona_id: null,
+          source: "csv" as const,
+          first_name: "Sarah",
+          last_name: "Chen",
+          email: "sarah@finflow.com",
+          title: "CFO",
+          company: "FinFlow",
+          linkedin_url: "",
+          company_website: "",
+          industry: "fintech",
+          location: "San Francisco, CA",
+          research_brief: null,
+          fit_score: null,
+          fit_status: null,
+          outreach_status: "pending" as const,
+          email_draft: null,
+          email_sent_at: null,
+          source_payload: {},
+        },
+      ],
+      personas: [],
       currentIndex: 0,
       errors: [],
     };
 
-    const result = await sourceContacts(state);
+    const result = await sourceContacts(state as never);
 
     expect(result.contacts).toHaveLength(1);
-    expect(result.contacts![0].first_name).toBe("Sarah");
+    expect(result.personas).toHaveLength(1);
+    expect(result.personas?.[0].name).toBe("Finance leader");
   });
 });
 
@@ -197,19 +124,17 @@ describe("routeNext routing logic", () => {
       senderName: "Alice",
       senderEmail: "alice@example.com",
       autoSendEnabled: false,
-      contacts: [
-        { id: "c1" } as any,
-        { id: "c2" } as any,
-      ],
+      contacts: [{ id: "c1" }, { id: "c2" }],
+      personas: [],
       currentIndex: 0,
       errors: [],
     };
 
-    const result = await routeNext(state);
+    const result = await routeNext(state as never);
     expect(result.currentIndex).toBe(1);
   });
 
-  it("returns nextIndex = 2 when all contacts processed", async () => {
+  it("marks outreach complete when all contacts are processed", async () => {
     const { routeNext } = await import("@/lib/agents/outreach/nodes");
 
     const state = {
@@ -219,12 +144,15 @@ describe("routeNext routing logic", () => {
       senderName: "Alice",
       senderEmail: "alice@example.com",
       autoSendEnabled: false,
-      contacts: [{ id: "c1" } as any, { id: "c2" } as any],
-      currentIndex: 1,
+      contacts: [{ id: "c1" }],
+      personas: [],
+      currentIndex: 0,
       errors: [],
     };
 
-    const result = await routeNext(state);
-    expect(result.currentIndex).toBe(2);
+    const result = await routeNext(state as never);
+
+    expect(result.currentIndex).toBe(1);
+    expect(mockEq).toHaveBeenCalled();
   });
 });

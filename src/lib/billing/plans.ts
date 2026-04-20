@@ -38,7 +38,7 @@ export const PLANS: Record<Plan, PlanConfig> = {
   },
   pro: {
     name: "Pro",
-    description: "For founders running active customer discovery.",
+    description: "For founders running active customer intelligence loops.",
     monthlyPriceUsd: 29,
     stripePriceId: process.env.STRIPE_PRO_PRICE_ID ?? null,
     highlighted: true,
@@ -57,7 +57,7 @@ export const PLANS: Record<Plan, PlanConfig> = {
   },
   max: {
     name: "Max",
-    description: "For teams and studios running multiple discovery tracks.",
+    description: "For teams and studios running multiple research tracks.",
     monthlyPriceUsd: 79,
     stripePriceId: process.env.STRIPE_MAX_PRICE_ID ?? null,
     highlighted: false,

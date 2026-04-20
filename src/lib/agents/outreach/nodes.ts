@@ -1,17 +1,14 @@
-import { searchApollo } from "@/lib/apollo";
-import { searchTavily } from "@/lib/tavily";
 import { sendEmail } from "@/lib/resend";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createLlm } from "@/lib/llm";
 import {
-  buildApolloParamsPrompt,
   buildResearchBriefPrompt,
   buildFitScorePrompt,
   buildEmailDraftPrompt,
   buildQualityCheckPrompt,
 } from "./prompts";
 import type { OutreachState } from "./state";
-import type { Contact } from "@/lib/supabase/types";
+import type { Contact, Persona } from "@/lib/supabase/types";
 
 let _llm: ReturnType<typeof createLlm> | null = null;
 
@@ -35,73 +32,39 @@ export async function sourceContacts(
 ): Promise<Partial<OutreachState>> {
   const supabase = await createServerSupabaseClient();
 
-  const paramsResponse = await getLlm().invoke(
-    buildApolloParamsPrompt(state.targetProfile)
-  );
-  const params = parseJson(paramsResponse.content as string) as {
-    jobTitles: string[];
-    seniorityLevels: string[];
-    keywords: string[];
-  };
+  const { data: personas } = await supabase
+    .from("personas")
+    .select("*")
+    .eq("project_id", state.projectId)
+    .order("created_at", { ascending: true });
 
-  let apolloContacts;
-  try {
-    apolloContacts = await searchApollo({
-      jobTitles: params.jobTitles,
-      seniorityLevels: params.seniorityLevels,
-      keywords: params.keywords,
-      perPage: 50,
-    });
-  } catch (err) {
+  if (!personas || personas.length === 0) {
     await supabase
       .from("projects")
       .update({ outreach_status: "idle" })
       .eq("id", state.projectId);
-    return { errors: [`Apollo sourcing failed: ${String(err)}`] };
+    return {
+      errors: ["Confirm your archetypes before running outreach."],
+      personas: [],
+    };
   }
 
-  if (apolloContacts.length === 0) {
+  if (state.contacts.length === 0) {
     await supabase
       .from("projects")
-      .update({ outreach_status: "complete" })
+      .update({ outreach_status: "idle" })
       .eq("id", state.projectId);
-    return { contacts: [], errors: ["No contacts found from Apollo"] };
+    return {
+      errors: ["Import CSV or JSON exports before running outreach."],
+      personas: personas as Persona[],
+    };
   }
 
-  const inserts = apolloContacts.map((c) => ({
-    project_id: state.projectId,
-    source: "apollo" as const,
-    first_name: c.first_name,
-    last_name: c.last_name,
-    email: c.email,
-    title: c.title,
-    company: c.company,
-    company_website: c.company_website,
-    linkedin_url: c.linkedin_url,
-    industry: c.industry,
-    location: c.location,
-    apollo_data: c.raw,
-    outreach_status: "pending" as const,
-    research_brief: null,
-    fit_score: null,
-    fit_status: null,
-    email_draft: null,
-    email_sent_at: null,
-  }));
-
-  const { data, error } = await supabase
-    .from("contacts")
-    .insert(inserts)
-    .select();
-
-  if (error) throw new Error(`Failed to insert contacts: ${error.message}`);
-
-  await supabase
-    .from("projects")
-    .update({ outreach_status: "running", outreach_progress: 0 })
-    .eq("id", state.projectId);
-
-  return { contacts: data as Contact[], currentIndex: 0 };
+  return {
+    contacts: state.contacts,
+    personas: personas as Persona[],
+    currentIndex: 0,
+  };
 }
 
 // ── Node 2: researchContact ─────────────────────────────────────────────────
@@ -112,20 +75,6 @@ export async function researchContact(
   const contact = state.contacts[state.currentIndex];
   const supabase = await createServerSupabaseClient();
 
-  const [companyResult, personResult] = await Promise.allSettled([
-    searchTavily(`${contact.company} company overview funding news`),
-    searchTavily(`${contact.first_name} ${contact.last_name} ${contact.company} ${contact.title}`),
-  ]);
-
-  const companyText =
-    companyResult.status === "fulfilled"
-      ? companyResult.value
-      : `No company info found for ${contact.company}`;
-  const personText =
-    personResult.status === "fulfilled"
-      ? personResult.value
-      : `No person info found for ${contact.first_name} ${contact.last_name}`;
-
   let researchBrief: Record<string, unknown>;
   try {
     const response = await getLlm().invoke(
@@ -134,17 +83,18 @@ export async function researchContact(
         lastName: contact.last_name,
         company: contact.company,
         title: contact.title,
-        companySearchResult: companyText,
-        personSearchResult: personText,
+        sourcePayload: contact.source_payload ?? {},
       })
     );
     researchBrief = parseJson(response.content as string);
   } catch {
     researchBrief = {
-      company_summary: companyText.slice(0, 500),
-      person_summary: personText.slice(0, 500),
-      recent_news: "none found",
-      talking_points: [],
+      profile_summary: `${contact.first_name} ${contact.last_name} ${contact.title} ${contact.company}`.trim(),
+      relevant_signals: [contact.title, contact.company, contact.industry].filter(
+        Boolean
+      ),
+      talking_points: [contact.location, contact.company_website].filter(Boolean),
+      confidence_note: "Imported profile was sparse, so this brief uses only basic fields.",
     };
   }
 
@@ -172,12 +122,20 @@ export async function scoreContact(
 
   let score = 0;
   let fitStatus: "passed" | "skipped" = "skipped";
+  let matchedPersonaId: string | null = null;
+  let matchedPersonaName: string | null = null;
+  let rationale = "";
 
   try {
     const response = await getLlm().invoke(
       buildFitScorePrompt({
         targetProfile: state.targetProfile,
         ideaDescription: state.ideaDescription,
+        personas: state.personas.map((persona) => ({
+          name: persona.name,
+          description: persona.description,
+          pain_points: persona.pain_points,
+        })),
         firstName: contact.first_name,
         lastName: contact.last_name,
         title: contact.title,
@@ -188,13 +146,38 @@ export async function scoreContact(
     const result = parseJson(response.content as string) as {
       score: number;
       rationale: string;
+      bestArchetype: string | null;
+      archetypeReason: string;
     };
     score = Math.max(0, Math.min(100, result.score));
     fitStatus = score >= 60 ? "passed" : "skipped";
+    rationale = result.rationale;
+    matchedPersonaName = result.bestArchetype ?? null;
+    matchedPersonaId =
+      state.personas.find(
+        (persona) =>
+          persona.name.trim().toLowerCase() ===
+          (result.bestArchetype ?? "").trim().toLowerCase()
+      )?.id ?? null;
+
+    await supabase
+      .from("contacts")
+      .update({
+        fit_score: score,
+        fit_status: fitStatus,
+        persona_id: matchedPersonaId,
+        research_brief: {
+          ...(contact.research_brief ?? {}),
+          fit_rationale: result.rationale,
+          matched_archetype: matchedPersonaName,
+          archetype_reason: result.archetypeReason,
+        },
+      })
+      .eq("id", contact.id);
   } catch (err) {
     await supabase
       .from("contacts")
-      .update({ fit_score: 0, fit_status: "skipped" })
+      .update({ fit_score: 0, fit_status: "skipped", persona_id: null })
       .eq("id", contact.id);
 
     const updatedContacts = [...state.contacts];
@@ -202,6 +185,7 @@ export async function scoreContact(
       ...contact,
       fit_score: 0,
       fit_status: "skipped",
+      persona_id: null,
     };
     return {
       contacts: updatedContacts,
@@ -209,16 +193,17 @@ export async function scoreContact(
     };
   }
 
-  await supabase
-    .from("contacts")
-    .update({ fit_score: score, fit_status: fitStatus })
-    .eq("id", contact.id);
-
   const updatedContacts = [...state.contacts];
   updatedContacts[state.currentIndex] = {
     ...contact,
     fit_score: score,
     fit_status: fitStatus,
+    persona_id: matchedPersonaId,
+    research_brief: {
+      ...(contact.research_brief ?? {}),
+      fit_rationale: rationale,
+      matched_archetype: matchedPersonaName,
+    },
   };
 
   return { contacts: updatedContacts };
@@ -240,6 +225,9 @@ export async function draftEmail(
         ideaDescription: state.ideaDescription,
         firstName: contact.first_name,
         company: contact.company,
+        personaName:
+          state.personas.find((persona) => persona.id === contact.persona_id)?.name ??
+          null,
         researchBrief: contact.research_brief ?? {},
       })
     );
@@ -363,7 +351,10 @@ export async function routeNext(
     const supabase = await createServerSupabaseClient();
     await supabase
       .from("projects")
-      .update({ outreach_status: "complete" })
+      .update({
+        outreach_status: "complete",
+        outreach_progress: state.contacts.length,
+      })
       .eq("id", state.projectId);
     return { currentIndex: nextIndex };
   }

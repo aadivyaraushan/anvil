@@ -29,6 +29,13 @@ export async function POST(
     return Response.json({ error: "Project not found" }, { status: 404 });
   }
 
+  if (!project.archetypes_verified) {
+    return Response.json(
+      { error: "Confirm your archetypes before running outreach." },
+      { status: 409 }
+    );
+  }
+
   if (project.outreach_status === "running") {
     return Response.json(
       { error: "Outreach is already running" },
@@ -42,23 +49,32 @@ export async function POST(
     .eq("user_id", user.id)
     .single();
 
-  const isResume = project.outreach_status === "partial";
-  let existingContacts: Contact[] = [];
+  const { data: contactRows } = await supabase
+    .from("contacts")
+    .select("*")
+    .eq("project_id", id)
+    .order("company", { ascending: true })
+    .order("first_name", { ascending: true });
 
-  if (isResume) {
-    const { data: pending } = await supabase
-      .from("contacts")
-      .select("*")
-      .eq("project_id", id)
-      .eq("outreach_status", "pending");
-    existingContacts = (pending ?? []) as Contact[];
+  const existingContacts = ((contactRows ?? []) as Contact[]).filter(
+    (contact) =>
+      contact.fit_score === null ||
+      (contact.fit_status === "passed" && contact.outreach_status === "pending")
+  );
+
+  if (existingContacts.length === 0) {
+    return Response.json(
+      { error: "Import new contacts before running outreach." },
+      { status: 400 }
+    );
   }
 
   await supabase
     .from("projects")
-    .update({ outreach_status: "running" })
+    .update({ outreach_status: "running", outreach_progress: 0 })
     .eq("id", id);
 
+  const batch = existingContacts.slice(0, 10);
   const initialState: Partial<OutreachState> = {
     projectId: id,
     targetProfile: project.target_profile,
@@ -66,7 +82,8 @@ export async function POST(
     senderName: settings?.sender_name ?? "",
     senderEmail: settings?.sender_email ?? "",
     autoSendEnabled: settings?.auto_send_enabled ?? false,
-    contacts: isResume ? existingContacts : [],
+    contacts: batch,
+    personas: [],
     currentIndex: 0,
     errors: [],
   };
@@ -74,24 +91,26 @@ export async function POST(
   after(async () => {
     try {
       const graph = buildOutreachGraph();
-      if (isResume && existingContacts.length > 10) {
-        const batch = existingContacts.slice(0, 10);
-        initialState.contacts = batch;
-        await graph.invoke(initialState);
-        const supabaseInner = await createServerSupabaseClient();
-        const { data: remaining } = await supabaseInner
-          .from("contacts")
-          .select("id")
-          .eq("project_id", id)
-          .eq("outreach_status", "pending");
-        if (remaining && remaining.length > 0) {
-          await supabaseInner
-            .from("projects")
-            .update({ outreach_status: "partial" })
-            .eq("id", id);
-        }
-      } else {
-        await graph.invoke(initialState);
+      await graph.invoke(initialState);
+
+      const supabaseInner = await createServerSupabaseClient();
+      const { data: remaining } = await supabaseInner
+        .from("contacts")
+        .select("id, fit_score, fit_status, outreach_status")
+        .eq("project_id", id);
+
+      const hasRemaining = (remaining ?? []).some(
+        (contact) =>
+          contact.fit_score === null ||
+          (contact.fit_status === "passed" &&
+            contact.outreach_status === "pending")
+      );
+
+      if (hasRemaining) {
+        await supabaseInner
+          .from("projects")
+          .update({ outreach_status: "partial" })
+          .eq("id", id);
       }
     } catch (err) {
       const supabaseInner = await createServerSupabaseClient();

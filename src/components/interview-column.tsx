@@ -5,15 +5,21 @@ import { createClient } from "@/lib/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
-import type { Interview } from "@/lib/supabase/types";
+import type { Interview, Persona } from "@/lib/supabase/types";
 
 type Props = {
   projectId: string;
   initialInterviews: Interview[];
+  personas: Persona[];
 };
 
-export function InterviewColumn({ projectId, initialInterviews }: Props) {
+export function InterviewColumn({
+  projectId,
+  initialInterviews,
+  personas,
+}: Props) {
   const [interviews, setInterviews] = useState<Interview[]>(initialInterviews);
+  const personasById = new Map(personas.map((persona) => [persona.id, persona.name]));
 
   useEffect(() => {
     const supabase = createClient();
@@ -101,6 +107,11 @@ export function InterviewColumn({ projectId, initialInterviews }: Props) {
                       ? "Zoom"
                       : "Google Meet"}
                   </p>
+                  {interview.persona_id && (
+                    <p className="text-[10px] text-muted-foreground">
+                      {personasById.get(interview.persona_id) ?? "Archetype"}
+                    </p>
+                  )}
                 </div>
                 <Badge
                   variant={

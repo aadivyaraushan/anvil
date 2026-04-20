@@ -74,7 +74,7 @@ export default function SignupPage() {
         <CardHeader>
           <CardTitle className="text-2xl">Create an Anvil account</CardTitle>
           <CardDescription>
-            Start running customer discovery with AI agents.
+            Start building an evidence-backed customer intelligence workflow.
           </CardDescription>
         </CardHeader>
         <CardContent>

@@ -1,5 +1,5 @@
 import { Annotation } from "@langchain/langgraph";
-import type { Contact } from "@/lib/supabase/types";
+import type { Contact, Persona } from "@/lib/supabase/types";
 
 export const OutreachStateAnnotation = Annotation.Root({
   projectId: Annotation<string>(),
@@ -9,6 +9,10 @@ export const OutreachStateAnnotation = Annotation.Root({
   senderEmail: Annotation<string>(),
   autoSendEnabled: Annotation<boolean>(),
   contacts: Annotation<Contact[]>({
+    default: () => [],
+    reducer: (_, incoming) => incoming,
+  }),
+  personas: Annotation<Persona[]>({
     default: () => [],
     reducer: (_, incoming) => incoming,
   }),

@@ -31,6 +31,7 @@ export async function getInterview(id: string): Promise<Interview> {
 export async function createInterview(params: {
   projectId: string;
   contactId: string | null;
+  personaId: string | null;
   meetingPlatform: MeetingPlatform;
   meetingLink: string;
   scheduledAt: string;
@@ -41,6 +42,7 @@ export async function createInterview(params: {
     .insert({
       project_id: params.projectId,
       contact_id: params.contactId,
+      persona_id: params.personaId,
       meeting_platform: params.meetingPlatform,
       meeting_link: params.meetingLink,
       scheduled_at: params.scheduledAt,
