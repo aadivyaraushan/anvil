@@ -1,7 +1,4 @@
-type ContactSource = "csv" | "json";
-
 export type ImportedContactDraft = {
-  source: ContactSource;
   first_name: string;
   last_name: string;
   email: string;
@@ -11,7 +8,6 @@ export type ImportedContactDraft = {
   company_website: string;
   industry: string;
   location: string;
-  source_payload: Record<string, unknown>;
 };
 
 const FIELD_ALIASES = {
@@ -168,7 +164,6 @@ function buildLocation(record: Record<string, unknown>): string {
 
 function normalizeRecord(
   record: Record<string, unknown>,
-  source: ContactSource,
 ): ImportedContactDraft | null {
   const fullName = getValue(record, FIELD_ALIASES.full_name);
   const explicitFirst = getValue(record, FIELD_ALIASES.first_name);
@@ -192,7 +187,6 @@ function normalizeRecord(
   if (!hasEnoughSignal) return null;
 
   return {
-    source,
     first_name: firstName,
     last_name: lastName,
     email,
@@ -202,7 +196,6 @@ function normalizeRecord(
     company_website: companyWebsite,
     industry,
     location,
-    source_payload: record,
   };
 }
 
@@ -217,7 +210,7 @@ function parseCsvContacts(content: string): ImportedContactDraft[] {
       headerRow.forEach((header, index) => {
         record[header] = row[index] ?? "";
       });
-      return normalizeRecord(record, "csv");
+      return normalizeRecord(record);
     })
     .filter((value): value is ImportedContactDraft => value !== null);
 }
@@ -227,7 +220,7 @@ function parseJsonContacts(content: string): ImportedContactDraft[] {
   return extractArrayCandidate(parsed)
     .map((item) => {
       if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-      return normalizeRecord(item as Record<string, unknown>, "json");
+      return normalizeRecord(item as Record<string, unknown>);
     })
     .filter((value): value is ImportedContactDraft => value !== null);
 }

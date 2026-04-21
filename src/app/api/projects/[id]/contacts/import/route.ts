@@ -82,7 +82,6 @@ export async function POST(
     .filter((row) => !existingKeys.has(contactKey(row)))
     .map((row) => ({
       project_id: id,
-      source: row.source,
       first_name: row.first_name,
       last_name: row.last_name,
       email: row.email,
@@ -92,13 +91,6 @@ export async function POST(
       company_website: row.company_website,
       industry: row.industry,
       location: row.location,
-      source_payload: row.source_payload,
-      research_brief: null,
-      fit_score: null,
-      fit_status: null,
-      outreach_status: "pending" as const,
-      email_draft: null,
-      email_sent_at: null,
       persona_id: null,
     }));
 
@@ -108,11 +100,6 @@ export async function POST(
       return Response.json({ error: error.message }, { status: 500 });
     }
   }
-
-  await supabase
-    .from("projects")
-    .update({ outreach_status: "idle", outreach_progress: 0 })
-    .eq("id", id);
 
   return Response.json({
     imported: inserts.length,

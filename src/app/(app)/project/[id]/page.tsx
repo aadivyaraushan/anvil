@@ -5,13 +5,11 @@ import {
 } from "@/lib/actions/projects";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { OutreachColumn } from "@/components/outreach-column";
 import { InterviewColumn } from "@/components/interview-column";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type {
-  Contact,
   Interview,
   AnalystDocument,
   Persona,
@@ -37,13 +35,6 @@ export default async function ProjectPage({
 
   const supabase = await createServerSupabaseClient();
   const personas = (await getPersonas(id)) as Persona[];
-  const { data: contactData } = await supabase
-    .from("contacts")
-    .select("*")
-    .eq("project_id", id)
-    .order("company", { ascending: true })
-    .order("first_name", { ascending: true });
-  const initialContacts = (contactData as Contact[]) ?? [];
 
   const { data: interviewData } = await supabase
     .from("interviews")
@@ -90,26 +81,12 @@ export default async function ProjectPage({
         </div>
       </div>
 
-      <div className="grid flex-1 grid-cols-3 divide-x divide-[#1a1a1e] overflow-hidden">
-        <div className="flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between border-b px-4 py-2">
-            <h2 className="text-sm font-semibold">Outreach</h2>
-            <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
-              Agent 1
-            </Badge>
-          </div>
-          <OutreachColumn
-            project={project}
-            initialContacts={initialContacts}
-            personas={personas}
-          />
-        </div>
-
+      <div className="grid flex-1 grid-cols-2 divide-x divide-[#1a1a1e] overflow-hidden">
         <div className="flex flex-col overflow-hidden">
           <div className="flex items-center justify-between border-b px-4 py-2">
             <h2 className="text-sm font-semibold">Interviews</h2>
             <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
-              Agent 2
+              Agent 1
             </Badge>
           </div>
           <InterviewColumn
@@ -123,7 +100,7 @@ export default async function ProjectPage({
           <div className="flex items-center justify-between border-b px-4 py-2">
             <h2 className="text-sm font-semibold">Analyst</h2>
             <Badge variant="outline" className="border-0 bg-accent text-accent-foreground text-xs">
-              Agent 3
+              Agent 2
             </Badge>
           </div>
           <AnalystColumn

@@ -1,7 +1,6 @@
 "use server";
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { revalidatePath } from "next/cache";
 import type { UserSettings } from "@/lib/supabase/types";
 
 export async function getUserSettings(): Promise<UserSettings | null> {
@@ -20,33 +19,4 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
   if (error) return null;
   return data;
-}
-
-export async function updateUserSettings(formData: FormData) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) throw new Error("Not authenticated");
-
-  const updates: Record<string, unknown> = {};
-
-  const senderEmail = formData.get("sender_email");
-  const senderName = formData.get("sender_name");
-  const autoSend = formData.get("auto_send_enabled") === "on";
-
-  if (senderEmail !== null) updates.sender_email = senderEmail;
-  if (senderName !== null) updates.sender_name = senderName;
-  updates.auto_send_enabled = autoSend;
-  updates.review_before_send = !autoSend;
-
-  const { error } = await supabase
-    .from("user_settings")
-    .update(updates)
-    .eq("user_id", user.id);
-
-  if (error) throw error;
-
-  revalidatePath("/settings");
 }
