@@ -180,6 +180,11 @@ describe("InterviewWorkspacePage", () => {
       status: "scheduled",
       transcript: [],
       suggested_questions: [],
+      brief: null,
+      brief_status: "idle",
+      calendar_event_id: null,
+      interviewee_name: null,
+      interviewee_email: null,
       created_at: "2026-04-20T10:00:00.000Z",
     };
 

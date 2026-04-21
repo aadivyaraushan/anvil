@@ -218,6 +218,8 @@ export default function InterviewWorkspacePage() {
     );
   }
 
+  const brief = interview.brief;
+
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between border-b px-6 py-3">
@@ -229,8 +231,9 @@ export default function InterviewWorkspacePage() {
           </Link>
           <div>
             <h1 className="text-sm font-semibold">
-              Interview &mdash;{" "}
-              {new Date(interview.scheduled_at).toLocaleDateString()}
+              {interview.interviewee_name
+                ? interview.interviewee_name
+                : `Interview — ${new Date(interview.scheduled_at).toLocaleDateString()}`}
             </h1>
             <p className="text-xs text-muted-foreground">
               {interview.meeting_link}
@@ -262,6 +265,42 @@ export default function InterviewWorkspacePage() {
           )}
         </div>
       </div>
+
+      {/* Pre-interview brief panel */}
+      {brief && interview.status !== "completed" && (
+        <div className="border-b bg-card/50 px-6 py-3">
+          <div className="flex items-start gap-6">
+            <div className="min-w-0 flex-1">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                Interview Brief
+              </p>
+              <p className="text-xs font-medium text-foreground">
+                {brief.name}
+                {brief.role && ` · ${brief.role}`}
+                {brief.company && ` @ ${brief.company}`}
+              </p>
+              <p className="mt-1 text-[11px] text-muted-foreground">{brief.summary}</p>
+              {brief.relevance && (
+                <p className="mt-1 text-[11px] text-emerald-400">{brief.relevance}</p>
+              )}
+            </div>
+            {brief.suggested_topics.length > 0 && (
+              <div className="shrink-0 max-w-xs">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">
+                  Topics to explore
+                </p>
+                <ul className="space-y-0.5">
+                  {brief.suggested_topics.map((t, i) => (
+                    <li key={i} className="text-[11px] text-foreground">
+                      · {t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="grid flex-1 grid-cols-2 divide-x divide-border overflow-hidden">
         <div className="flex flex-col overflow-hidden">

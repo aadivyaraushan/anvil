@@ -49,6 +49,11 @@ const baseInterview: Interview = {
   status: "scheduled",
   transcript: [],
   suggested_questions: [],
+  brief: null,
+  brief_status: "idle",
+  calendar_event_id: null,
+  interviewee_name: null,
+  interviewee_email: null,
   created_at: new Date().toISOString(),
 };
 
