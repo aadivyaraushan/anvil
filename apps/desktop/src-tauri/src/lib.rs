@@ -188,6 +188,7 @@ pub fn run() {
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_fs::init())
         .setup(|app| {
             // Register ⌥⌘R global shortcut → show capsule
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};

@@ -12,6 +12,12 @@
     "global-shortcut:allow-register",
     "global-shortcut:allow-unregister",
     "log:default",
-    "store:default"
+    "store:default",
+    "fs:default",
+    "fs:allow-read-file",
+    {
+      "identifier": "fs:scope",
+      "allow": [{ "path": "$APPDATA/recordings/**" }]
+    }
   ]
 }

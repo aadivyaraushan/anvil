@@ -102,7 +102,10 @@ function StatSkeleton() {
 // ---------------------------------------------------------------------------
 
 async function invokeTauri(cmd: string, args?: Record<string, unknown>) {
-  if (typeof window !== "undefined" && "__TAURI__" in window) {
+  if (
+    typeof window !== "undefined" &&
+    ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
+  ) {
     const { invoke } = await import("@tauri-apps/api/core");
     return invoke(cmd, args);
   }
@@ -166,7 +169,9 @@ export default function DashboardPage() {
   const [recordingToast, setRecordingToast] = useState<string | null>(null);
 
   async function handleStartRecording() {
-    const result = await invokeTauri("start_recording");
+    // The capsule owns the recording flow — it picks the project, invokes
+    // `start_recording`, and handles the upload. Dashboard just summons it.
+    const result = await invokeTauri("show_capsule");
     if (result === null) {
       setRecordingToast("Tauri not available — run the desktop app to record.");
       setTimeout(() => setRecordingToast(null), 3500);
