@@ -3,7 +3,8 @@ import type { NextConfig } from "next";
 const ALLOWED_ORIGINS = [
   "tauri://localhost",
   "http://localhost:3000",
-  "https://anvil.app",
+  "https://app.anvil-dev.com",
+  "https://anvil-dev.com",
 ];
 
 const nextConfig: NextConfig = {
