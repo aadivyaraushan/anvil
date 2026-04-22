@@ -2,6 +2,5 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "pnpm -C ../.. install --frozen-lockfile=false",
   "buildCommand": "pnpm -C ../.. --filter marketing build",
-  "framework": "nextjs",
-  "outputDirectory": "out"
+  "framework": "nextjs"
 }
