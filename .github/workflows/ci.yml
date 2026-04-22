@@ -1,0 +1,207 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "redesign/**"]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ── Typecheck + Lint ────────────────────────────────────────────────────────
+  typecheck:
+    name: Typecheck & Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Typecheck all packages
+        run: pnpm -r typecheck
+
+      - name: Lint all packages
+        run: pnpm -r lint
+
+  # ── Unit tests (Vitest) ─────────────────────────────────────────────────────
+  unit:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run unit tests
+        run: pnpm -r test --reporter=verbose
+
+      - name: Upload coverage
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage
+          path: "**/coverage/"
+          retention-days: 7
+
+  # ── Rust tests ──────────────────────────────────────────────────────────────
+  rust-test:
+    name: Rust Unit Tests
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+
+      - name: Run Rust tests
+        working-directory: apps/desktop/src-tauri
+        run: cargo test
+
+  # ── Integration tests ───────────────────────────────────────────────────────
+  integration:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: supabase/postgres:15.1.0.117
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/postgres
+      SUPABASE_URL: http://localhost:54321
+      SUPABASE_ANON_KEY: test_anon_key
+      SUPABASE_SERVICE_KEY: test_service_key
+      OPENAI_API_KEY: sk-test-fake
+      DEEPGRAM_API_KEY: dg-test-fake
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Run integration tests
+        run: pnpm --filter api test:integration
+
+  # ── E2E — Desktop app (Playwright against static export) ───────────────────
+  e2e-desktop:
+    name: E2E — Desktop
+    runs-on: ubuntu-latest
+    needs: [typecheck, unit]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build static export
+        working-directory: apps/desktop
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321' }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'test_anon_key' }}
+          NEXT_PUBLIC_API_URL: http://localhost:3100
+        run: pnpm build
+
+      - name: Install Playwright
+        working-directory: apps/desktop
+        run: pnpm dlx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: apps/desktop
+        run: pnpm test:e2e
+        env:
+          BASE_URL: http://localhost:3000
+
+      - name: Upload Playwright traces
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-desktop
+          path: apps/desktop/playwright-report/
+          retention-days: 7
+
+  # ── E2E — Marketing site ────────────────────────────────────────────────────
+  e2e-marketing:
+    name: E2E — Marketing
+    runs-on: ubuntu-latest
+    needs: [typecheck]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Build static export
+        working-directory: apps/marketing
+        run: pnpm build
+
+      - name: Install Playwright
+        working-directory: apps/marketing
+        run: pnpm dlx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: apps/marketing
+        run: pnpm test:e2e
+
+      - name: Upload Playwright traces
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-traces-marketing
+          path: apps/marketing/playwright-report/
+          retention-days: 7

@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Anvil
 
-## Getting Started
+A macOS desktop recorder that captures customer conversations (calendar calls, in-person, phone) and turns them into findings — built around LangGraph + Deepgram + Supabase.
 
-First, run the development server:
+## Monorepo layout
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```
+apps/
+  desktop/    Next.js workspace UI (Tauri-wrapped as .dmg, also deployable as SSR web app)
+  api/        Next.js API routes — LangGraph agents, Deepgram, Stripe, Google Calendar
+  marketing/  Static marketing site (anvil.app)
+supabase/     Migrations 001–011 (outreach removed; calendar, source, persona status added)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Local development
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+pnpm install
+pnpm dev:api         # http://localhost:3001
+pnpm dev:desktop     # http://localhost:3000
+pnpm dev:marketing   # http://localhost:3002
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Env files to populate (see `.env.local` in each app):
+- `apps/api/.env.local` — Supabase service role, OpenAI, Deepgram, Stripe, Google Calendar
+- `apps/desktop/.env.local` — Supabase anon, `NEXT_PUBLIC_API_URL`, Stripe publishable
 
-## Learn More
+## Tests & checks
 
-To learn more about Next.js, take a look at the following resources:
+```bash
+pnpm -r typecheck    # 3 apps clean
+pnpm -r test         # 107 unit tests (87 desktop, 20 api)
+pnpm --filter desktop test:e2e    # Playwright (needs a running dev server)
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Deployment
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Vercel (web)
 
-## Deploy on Vercel
+This is a pnpm monorepo. Vercel needs to know which app to build. The cleanest setup is **one Vercel project per app**:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+| App        | Vercel Root Directory | Framework |
+|------------|----------------------|-----------|
+| Desktop UI | `apps/desktop`       | Next.js   |
+| API        | `apps/api`           | Next.js   |
+| Marketing  | `apps/marketing`     | Next.js (static export) |
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Each app has its own `vercel.json` that handles install/build from the repo root. To wire an existing Vercel project:
+
+1. Project Settings → General → **Root Directory** → set to `apps/desktop` (or whichever app)
+2. Framework preset: Next.js (auto-detected)
+3. Env Vars: copy the corresponding `.env.local` keys into Vercel's Environment Variables tab
+
+### Tauri desktop (.dmg)
+
+```bash
+BUILD_TARGET=tauri pnpm --filter desktop build
+pnpm --filter desktop tauri build
+```
+
+CI builds signed + notarized .dmg on tagged releases (`v*.*.*`) — see `.github/workflows/release.yml`.
+
+## Database
+
+Migrations live in `supabase/migrations/`. Apply with:
+
+```bash
+supabase db push
+```
