@@ -12,7 +12,11 @@ ${targetProfile}
 
 Generate distinct customer archetypes for this product. Each archetype is a meaningfully different type of person who would approach this product with different needs, context, or behaviors.
 
-Generate as many archetypes as genuinely fit — typically 2–4, sometimes more for products with clearly distinct segments. Do not invent archetypes that do not follow naturally from the idea and target profile.
+Return the smallest set of archetypes that still captures the real differences in this market. Typically this should be 2-3 archetypes, occasionally 4 if the segments are clearly distinct.
+
+Do not split hairs. If two archetypes would have the same buyer context, goals, pains, or buying behavior with only minor title/company variations, merge them into one broader archetype instead of listing both.
+
+Only include an archetype when it is meaningfully different from the others. Do not invent archetypes that do not follow naturally from the idea and target profile, and do not pad the list for completeness.
 
 Respond with ONLY a valid JSON array, no markdown, no explanation:
 [

@@ -1,0 +1,14 @@
+{
+  "identifier": "default",
+  "description": "Default capability set for Anvil desktop",
+  "platforms": ["macOS"],
+  "windows": ["main", "capsule"],
+  "permissions": [
+    "core:default",
+    "deep-link:default",
+    "global-shortcut:allow-register",
+    "global-shortcut:allow-unregister",
+    "log:default",
+    "store:default"
+  ]
+}

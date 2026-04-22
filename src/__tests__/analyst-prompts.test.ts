@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildArchetypePrompt,
   buildExtractorPrompt,
   buildSynthesizerPrompt,
 } from "@/lib/agents/analyst/prompts";
@@ -31,6 +32,19 @@ const extractions = [
     keyQuote: "At least 20 hours per person. It's killing us.",
   },
 ];
+
+describe("buildArchetypePrompt", () => {
+  it("pushes for a minimal, non-redundant archetype set", () => {
+    const prompt = buildArchetypePrompt(
+      "AI reconciliation tool for finance teams",
+      "Finance leaders at fast-growing software companies"
+    );
+    expect(prompt).toContain("smallest set");
+    expect(prompt).toContain("Do not split hairs");
+    expect(prompt).toContain("merge them into one");
+    expect(prompt).toContain("2-3");
+  });
+});
 
 describe("buildExtractorPrompt", () => {
   it("includes interviewer and interviewee turns", () => {

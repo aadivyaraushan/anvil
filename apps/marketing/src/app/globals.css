@@ -1,0 +1,63 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-serif: var(--font-instrument-serif), "Georgia", serif;
+
+  /* Brand colours */
+  --color-amber: oklch(0.77 0.14 75);
+  --color-rose: oklch(0.66 0.22 18);
+  --color-azure: oklch(0.707 0.165 254);
+
+  /* Background */
+  --color-bg: oklch(0.11 0.008 264);
+  --color-surface-1: oklch(0.155 0.01 264);
+  --color-surface-2: oklch(0.185 0.012 264);
+
+  /* Foreground */
+  --color-fg: oklch(0.96 0.005 264);
+  --color-fg-2: oklch(0.72 0.01 264);
+  --color-fg-3: oklch(0.50 0.01 264);
+  --color-fg-4: oklch(0.38 0.008 264);
+
+  /* Borders */
+  --color-hair: rgba(255,255,255,0.07);
+  --color-hair-strong: rgba(255,255,255,0.13);
+}
+
+:root {
+  --amber: oklch(0.77 0.14 75);
+  --rose: oklch(0.66 0.22 18);
+  --azure: oklch(0.707 0.165 254);
+}
+
+html {
+  background: oklch(0.11 0.008 264);
+  color: oklch(0.96 0.005 264);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography utilities */
+.anvil-caps {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: oklch(0.50 0.01 264);
+}
+
+.anvil-serif {
+  font-family: var(--font-instrument-serif), Georgia, serif;
+  font-style: italic;
+}
+
+.anvil-mono {
+  font-family: var(--font-geist-mono), monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hair-line card border */
+.card-border {
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.08);
+}
