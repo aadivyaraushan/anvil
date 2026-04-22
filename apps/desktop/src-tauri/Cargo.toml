@@ -11,7 +11,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["protocol-asset", "devtools", "tray-icon"] }
+tauri = { version = "2", features = ["devtools", "tray-icon", "image-png"] }
 tauri-plugin-deep-link = "2"
 tauri-plugin-global-shortcut = "2"
 tauri-plugin-log = "2"
@@ -19,6 +19,8 @@ tauri-plugin-store = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }
+cpal = "0.15"
+hound = "3.5"
 
 [profile.dev]
 incremental = true

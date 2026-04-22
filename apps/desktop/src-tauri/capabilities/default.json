@@ -3,6 +3,9 @@
   "description": "Default capability set for Anvil desktop",
   "platforms": ["macOS"],
   "windows": ["main", "capsule"],
+  "remote": {
+    "urls": ["https://app.anvil-dev.com/*"]
+  },
   "permissions": [
     "core:default",
     "deep-link:default",
