@@ -10,25 +10,6 @@ on:
       tag:
         type: string
         required: false
-    secrets:
-      APPLE_CERTIFICATE:
-        required: false
-      APPLE_CERTIFICATE_PASSWORD:
-        required: false
-      APPLE_SIGNING_IDENTITY:
-        required: false
-      APPLE_ID:
-        required: false
-      APPLE_ID_PASSWORD:
-        required: false
-      APPLE_TEAM_ID:
-        required: false
-      NEXT_PUBLIC_SUPABASE_URL:
-        required: false
-      NEXT_PUBLIC_SUPABASE_ANON_KEY:
-        required: false
-      NEXT_PUBLIC_API_URL:
-        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -36,7 +17,7 @@ concurrency:
 
 jobs:
   build-tauri:
-    name: Build macOS .dmg
+    name: Build macOS .dmg (unsigned)
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,50 +39,31 @@ jobs:
         with:
           workspaces: apps/desktop/src-tauri
 
-      - run: pnpm install --frozen-lockfile
+      - run: pnpm install --frozen-lockfile=false
 
-      # Import Apple Developer certificate when secrets are present (tagged release)
-      - name: Import Apple certificate
-        if: ${{ secrets.APPLE_CERTIFICATE != '' }}
-        env:
-          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-          KEYCHAIN_PASSWORD: ${{ github.run_id }}
-        run: |
-          echo "$APPLE_CERTIFICATE" | base64 --decode > certificate.p12
-          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
-          security import certificate.p12 -k build.keychain -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" build.keychain
-          rm -f certificate.p12
-
-      - name: Build Next.js static export
+      # Build the unsigned Tauri app.
+      # The webview is a thin shell pointing at https://app.anvil-dev.com.
+      # No Apple signing or notarization — users will see Gatekeeper warnings
+      # and need to right-click → Open the first time. This is a prototype;
+      # buy an Apple Developer account before shipping to non-technical users.
+      - name: Build Tauri app (universal binary, unsigned)
         working-directory: apps/desktop
-        env:
-          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-          NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL || 'https://api.anvil.app' }}
-        run: pnpm build
-
-      - name: Build Tauri app (universal binary)
-        working-directory: apps/desktop
-        env:
-          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          pnpm dlx @tauri-apps/cli build \
-            --target universal-apple-darwin \
-            ${{ inputs.tag && format('-- --tag {0}', inputs.tag) || '' }}
+          pnpm dlx @tauri-apps/cli build --target universal-apple-darwin
+
+      - name: Rename .dmg with tag/sha
+        id: rename
+        run: |
+          SUFFIX="${{ inputs.tag || github.sha }}"
+          SRC=$(ls apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg | head -1)
+          DEST="$(dirname "$SRC")/Anvil-${SUFFIX}.dmg"
+          mv "$SRC" "$DEST"
+          echo "path=$DEST" >> "$GITHUB_OUTPUT"
 
       - name: Upload .dmg artifact
         uses: actions/upload-artifact@v4
         with:
           name: Anvil-${{ inputs.tag || github.sha }}.dmg
-          path: apps/desktop/src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          path: ${{ steps.rename.outputs.path }}
           retention-days: ${{ inputs.tag && 90 || 7 }}
-          if-no-files-found: warn
+          if-no-files-found: error

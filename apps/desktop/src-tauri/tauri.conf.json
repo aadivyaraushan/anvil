@@ -3,10 +3,10 @@
   "version": "0.1.0",
   "identifier": "app.anvil.desktop",
   "build": {
-    "beforeBuildCommand": "pnpm export",
+    "beforeBuildCommand": "",
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://localhost:3000",
-    "frontendDist": "../out"
+    "frontendDist": "./webview-stub"
   },
   "bundle": {
     "active": true,
@@ -37,7 +37,7 @@
       {
         "label": "main",
         "title": "Anvil",
-        "url": "/dashboard/",
+        "url": "https://app.anvil-dev.com/dashboard",
         "width": 1280,
         "height": 820,
         "minWidth": 1000,
@@ -48,7 +48,7 @@
       {
         "label": "capsule",
         "title": "Anvil — Recording",
-        "url": "/capsule/",
+        "url": "https://app.anvil-dev.com/capsule",
         "width": 420,
         "height": 280,
         "decorations": false,
