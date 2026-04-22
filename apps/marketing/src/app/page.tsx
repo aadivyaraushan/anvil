@@ -15,7 +15,7 @@ const PLANS = [
       "Transcript + basic findings",
     ],
     cta: "Download free",
-    ctaHref: "https://releases.anvil.app/Anvil-latest.dmg",
+    ctaHref: "https://github.com/aadivyaraushan/anvil/releases/latest",
   },
   {
     name: "Pro",
@@ -30,7 +30,7 @@ const PLANS = [
       "Calendar sync",
     ],
     cta: "Start Pro — $29/mo",
-    ctaHref: "https://releases.anvil.app/Anvil-latest.dmg",
+    ctaHref: "https://github.com/aadivyaraushan/anvil/releases/latest",
   },
   {
     name: "Max",
@@ -45,7 +45,7 @@ const PLANS = [
       "Priority support",
     ],
     cta: "Start Max — $79/mo",
-    ctaHref: "https://releases.anvil.app/Anvil-latest.dmg",
+    ctaHref: "https://github.com/aadivyaraushan/anvil/releases/latest",
   },
 ];
 
@@ -107,7 +107,7 @@ export default function MarketingPage() {
           Sign in
         </a>
         <a
-          href="https://releases.anvil.app/Anvil-latest.dmg"
+          href="https://github.com/aadivyaraushan/anvil/releases/latest"
           className="h-8 px-4 rounded-md bg-[oklch(0.55_0.18_264)] hover:bg-[oklch(0.60_0.18_264)] text-white text-[13px] font-medium transition-colors inline-flex items-center"
         >
           Download for Mac
@@ -136,7 +136,7 @@ export default function MarketingPage() {
           </p>
           <div className="mt-8 flex gap-3 items-center">
             <a
-              href="https://releases.anvil.app/Anvil-latest.dmg"
+              href="https://github.com/aadivyaraushan/anvil/releases/latest"
               className="h-10 px-5 rounded-md bg-[oklch(0.55_0.18_264)] hover:bg-[oklch(0.60_0.18_264)] text-white text-[14px] font-medium transition-colors inline-flex items-center gap-2"
             >
               Download for Mac
