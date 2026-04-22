@@ -51,6 +51,12 @@ export function FindingsRail({ projectId }: FindingsRailProps) {
 
   const { data: interviewsData } = useInterviews(projectId)
 
+  // Hooks must run unconditionally on every render — keep these above the
+  // early returns below.
+  const { status: networkStatus } = useNetworkStatus()
+  const [running, setRunning] = useState(false)
+  const isOffline = networkStatus !== 'online'
+
   const isLoading = docLoading || personasLoading
   const interviewCount = interviewsData?.interviews?.length ?? 0
 
@@ -94,9 +100,6 @@ export function FindingsRail({ projectId }: FindingsRailProps) {
 
   // We use project's analyst_status for generating indicator — derive from doc presence
   const showGenerating = !analystDoc && interviewCount >= 2
-  const { status: networkStatus } = useNetworkStatus()
-  const isOffline = networkStatus !== 'online'
-  const [running, setRunning] = useState(false)
 
   async function handleRunAnalysis() {
     if (isOffline || running) return

@@ -19,8 +19,10 @@ function formatDuration(secs: number): string {
   return `${m}:${s}`;
 }
 
-// Waveform bars — purely decorative, animates while recording
-function WaveformBars({ active }: { active: boolean }) {
+// Waveform bars — purely decorative, animates while recording. `phase` is
+// an externally-driven tick so the render stays pure (no Date.now() calls
+// during render).
+function WaveformBars({ active, phase }: { active: boolean; phase: number }) {
   return (
     <div className="flex items-center gap-px h-5">
       {Array.from({ length: 36 }).map((_, i) => (
@@ -29,7 +31,7 @@ function WaveformBars({ active }: { active: boolean }) {
           className="flex-1 rounded-[1px] transition-all duration-150"
           style={{
             height: active
-              ? `${3 + Math.abs(Math.sin(Date.now() / 300 + i * 0.8)) * 14}px`
+              ? `${3 + Math.abs(Math.sin(phase + i * 0.8)) * 14}px`
               : "3px",
             background:
               i > 30
@@ -216,7 +218,7 @@ export default function CapsulePage() {
 
       {/* Waveform */}
       <div className="px-4">
-        <WaveformBars active={recState.is_recording} />
+        <WaveformBars active={recState.is_recording} phase={tick * 0.8} />
       </div>
 
       {/* Project picker (not recording) */}

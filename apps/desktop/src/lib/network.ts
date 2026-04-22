@@ -49,6 +49,10 @@ export function useNetworkStatus(): { status: NetworkStatus; lastChecked: Date |
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
 
+    // Initial probe on mount. Async + kicks off state updates — that's the
+    // point. The lint rule flags any setState chain originating from an
+    // effect body, which doesn't apply cleanly to async bootstrapping.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     check()
 
     intervalRef.current = setInterval(check, POLL_INTERVAL_MS)
