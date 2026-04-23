@@ -12,7 +12,7 @@ const POLL_INTERVAL_MS = 15_000
 
 function getHealthUrl(): string {
   const base = process.env.NEXT_PUBLIC_API_URL ?? ''
-  return `${base}/health`
+  return `${base}/api/health`
 }
 
 async function pollHealth(): Promise<NetworkStatus> {
