@@ -19,8 +19,10 @@ function formatDuration(secs: number): string {
   return `${m}:${s}`;
 }
 
-// Waveform bars — purely decorative, animates while recording
-function WaveformBars({ active }: { active: boolean }) {
+// Waveform bars — purely decorative, animates while recording. `phase` is
+// an externally-driven tick so the render stays pure (no Date.now() calls
+// during render).
+function WaveformBars({ active, phase }: { active: boolean; phase: number }) {
   return (
     <div className="flex items-center gap-px h-5">
       {Array.from({ length: 36 }).map((_, i) => (
@@ -29,7 +31,7 @@ function WaveformBars({ active }: { active: boolean }) {
           className="flex-1 rounded-[1px] transition-all duration-150"
           style={{
             height: active
-              ? `${3 + Math.abs(Math.sin(Date.now() / 300 + i * 0.8)) * 14}px`
+              ? `${3 + Math.abs(Math.sin(phase + i * 0.8)) * 14}px`
               : "3px",
             background:
               i > 30
@@ -44,7 +46,7 @@ function WaveformBars({ active }: { active: boolean }) {
 }
 
 export default function CapsulePage() {
-  const { invoke, listen, isTauri } = useTauri();
+  const { invoke, listen, isTauri, readFileBytes } = useTauri();
   const { data: projects } = useProjects();
   const projectList = projects ?? [];
 
@@ -117,30 +119,56 @@ export default function CapsulePage() {
       const filePath = await invoke<string>("stop_recording", {
         recordingId: recState.recording_id,
       });
+      if (!filePath) {
+        setError("Could not finalize recording.");
+        return;
+      }
 
-      // Upload recording to API
+      // Read the WAV off disk via the fs plugin. The upload endpoint expects
+      // a `file` field as a multipart blob, not a filesystem path string.
+      const bytes = await readFileBytes(filePath);
+      if (!bytes) {
+        setError("Could not read recording file.");
+        return;
+      }
+      const fileName = filePath.split(/[\\/]/).pop() ?? "recording.wav";
+      // Copy into a plain ArrayBuffer — plugin-fs returns a Uint8Array whose
+      // backing type (`ArrayBufferLike`) TS won't accept as a BlobPart.
+      const buf = bytes.slice().buffer as ArrayBuffer;
+      const blob = new Blob([buf], { type: "audio/wav" });
+
       const { getSupabase } = await import("@/lib/supabase/client");
       const session = await getSupabase().auth.getSession();
       const token = session.data.session?.access_token;
+      if (!token) {
+        setError("Not signed in. Sign in again to upload.");
+        return;
+      }
 
       const fd = new FormData();
-      fd.append("file_path", filePath ?? "");
+      fd.append("file", blob, fileName);
       fd.append("project_id", recState.project_id ?? "");
       fd.append("source", "desktop");
       if (recState.attendee_name) fd.append("attendee_name", recState.attendee_name);
 
-      await fetch(`${process.env.NEXT_PUBLIC_API_URL}/api/interviews/upload`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/interviews/upload`,
+        {
+          method: "POST",
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        }
+      );
+      if (!res.ok) {
+        setError(`Upload failed (${res.status}). Saved locally, will retry.`);
+      }
     } catch (e) {
       setError("Upload failed. The recording is saved locally and will retry.");
       console.error(e);
     } finally {
       setUploading(false);
     }
-  }, [invoke, recState]);
+  }, [invoke, readFileBytes, recState]);
 
   const handleClose = useCallback(async () => {
     await invoke("hide_capsule");
@@ -190,7 +218,7 @@ export default function CapsulePage() {
 
       {/* Waveform */}
       <div className="px-4">
-        <WaveformBars active={recState.is_recording} />
+        <WaveformBars active={recState.is_recording} phase={tick * 0.8} />
       </div>
 
       {/* Project picker (not recording) */}

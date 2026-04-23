@@ -100,6 +100,8 @@ export function useOutbox(): {
   }, [])
 
   useEffect(() => {
+    // Initial load from IndexedDB on mount. Async + kicks off state updates.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh()
   }, [refresh])
 

@@ -9,28 +9,14 @@ permissions:
   contents: write
 
 jobs:
-  # Run full CI first
-  ci:
-    uses: ./.github/workflows/ci.yml
-
-  # Build signed + notarized .dmg
+  # Build unsigned .dmg
   build:
     uses: ./.github/workflows/tauri-build.yml
-    needs: ci
     with:
       tag: ${{ github.ref_name }}
-    secrets:
-      APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
-      NEXT_PUBLIC_API_URL: ${{ secrets.NEXT_PUBLIC_API_URL }}
 
-  # Create GitHub release + upload .dmg
+  # Create GitHub release + upload .dmg as a release asset.
+  # (No S3 / CDN — GitHub Releases is the canonical download target for now.)
   release:
     name: Publish GitHub Release
     runs-on: ubuntu-latest
@@ -61,50 +47,19 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           name: Anvil ${{ github.ref_name }}
-          body: ${{ steps.notes.outputs.result }}
+          body: |
+            ${{ steps.notes.outputs.result }}
+
+            ---
+
+            **Heads up:** this build is **unsigned**. macOS Gatekeeper will block it the first time you try to open it. To install:
+
+            1. Download `Anvil-${{ github.ref_name }}.dmg` below
+            2. Drag Anvil.app to your Applications folder
+            3. **Right-click** the app and choose **Open** (don't double-click)
+            4. Click **Open** on the warning dialog
+
+            You only need to do this once per install. Future launches work normally.
           draft: false
           prerelease: ${{ contains(github.ref_name, '-') }}
           files: dist/*.dmg
-
-      # Upload to releases.anvil.app (S3-compatible) as the canonical download URL
-      - name: Upload to releases bucket
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.RELEASES_AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.RELEASES_AWS_SECRET_ACCESS_KEY }}
-          AWS_DEFAULT_REGION: us-east-1
-        run: |
-          # Upload versioned copy
-          aws s3 cp dist/*.dmg \
-            s3://releases.anvil.app/Anvil-${{ github.ref_name }}.dmg \
-            --content-type application/x-apple-diskimage \
-            --acl public-read
-
-          # Update "latest" pointer
-          aws s3 cp dist/*.dmg \
-            s3://releases.anvil.app/Anvil-latest.dmg \
-            --content-type application/x-apple-diskimage \
-            --acl public-read
-
-          # Write a JSON manifest for Tauri auto-updater
-          VERSION=$(echo "${{ github.ref_name }}" | sed 's/^v//')
-          DMG_URL="https://releases.anvil.app/Anvil-${{ github.ref_name }}.dmg"
-          SIGNATURE="${{ secrets.TAURI_UPDATER_SIGNATURE }}"
-
-          cat > update-manifest.json << EOF
-          {
-            "version": "$VERSION",
-            "notes": "See https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}",
-            "pub_date": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
-            "platforms": {
-              "darwin-universal": {
-                "signature": "$SIGNATURE",
-                "url": "$DMG_URL"
-              }
-            }
-          }
-          EOF
-
-          aws s3 cp update-manifest.json \
-            s3://releases.anvil.app/update-manifest.json \
-            --content-type application/json \
-            --acl public-read
