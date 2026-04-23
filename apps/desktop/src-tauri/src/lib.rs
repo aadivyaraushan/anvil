@@ -192,7 +192,7 @@ pub fn run() {
         .setup(|app| {
             // Register ⌥⌘R global shortcut → show capsule
             use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-            app.global_shortcut().on_shortcut("Alt+Meta+R", {
+            app.global_shortcut().on_shortcut("Alt+Super+R", {
                 let handle = app.handle().clone();
                 move |_app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
