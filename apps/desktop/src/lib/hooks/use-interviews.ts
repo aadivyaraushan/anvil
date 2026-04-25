@@ -59,6 +59,11 @@ export function useInterviews(projectId: string) {
       };
     },
     enabled: Boolean(projectId),
+    // Server-side pipelines (Deepgram transcription, analyst document
+    // generation) write rows out-of-band. Re-fetch every time the
+    // workspace mounts so users don't sit on stale "uploading" rows
+    // long after the transcript has actually landed.
+    refetchOnMount: "always",
   });
 }
 
@@ -76,6 +81,7 @@ export function useInterview(interviewId: string) {
       return data as Interview;
     },
     enabled: Boolean(interviewId),
+    refetchOnMount: "always",
   });
 }
 

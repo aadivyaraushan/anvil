@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Link as LinkIcon, ChevronLeft } from 'lucide-react'
 import { useInterviews } from '@/lib/hooks/use-interviews'
@@ -113,8 +113,14 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
   const [attendeeName, setAttendeeName] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
   const createInterview = useCreateInterview()
+  // Synchronous double-submit guard. `disabled={isPending}` alone is not
+  // enough: a synchronous double-click fires both handlers before React
+  // re-renders with isPending=true, producing two inserts.
+  const submittingRef = useRef(false)
 
   const handleSubmit = () => {
+    if (submittingRef.current) return
+    submittingRef.current = true
     createInterview.mutate(
       {
         projectId,
@@ -126,7 +132,10 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
         attendeeCompany: null,
         scheduledAt: scheduledTime || null,
       },
-      { onSuccess: onCancel }
+      {
+        onSuccess: onCancel,
+        onSettled: () => { submittingRef.current = false },
+      }
     )
   }
 

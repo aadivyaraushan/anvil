@@ -10,21 +10,25 @@ interface AuthGuardProps {
 
 /**
  * Client-side auth guard.
- * - While the session is loading: renders nothing.
- * - If there is no session: redirects to /login.
- * - If there is a session: renders children.
+ *
+ * Distinguishes "haven't checked yet" (data === undefined) from "checked,
+ * no session" (data === null). The `isLoading` flag is unreliable here:
+ * on SSR / first hydration, React Query reports isLoading=false because no
+ * fetch has actually started (isLoading = isPending && isFetching, and
+ * isFetching is false on the server). Reading `session === null` instead
+ * avoids the SSR-hydration bounce where AuthGuard would redirect to /login
+ * before the queryFn ever ran.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
-  const { data: session, isLoading } = useSession();
+  const { data: session } = useSession();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !session) {
+    if (session === null) {
       router.replace("/login");
     }
-  }, [isLoading, session, router]);
+  }, [session, router]);
 
-  if (isLoading) return null;
   if (!session) return null;
 
   return <>{children}</>;

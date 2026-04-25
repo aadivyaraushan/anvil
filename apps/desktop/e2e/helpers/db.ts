@@ -116,13 +116,9 @@ export async function seedPersona(opts: {
     .single();
   if (error) throw new Error(`seedPersona failed: ${error.message}`);
 
-  const { error: projectError } = await supabase
-    .from("projects")
-    .update({ archetypes_verified: true })
-    .eq("id", opts.projectId);
-  if (projectError) {
-    throw new Error(`seedPersona(project update) failed: ${projectError.message}`);
-  }
+  // The `archetypes_verified` gate was removed in migration 009 (the
+  // Direction C pivot dropped the archetype confirmation step), so
+  // there's nothing to flip on the project after seeding a persona.
 
   return (data as { id: string }).id;
 }
@@ -180,7 +176,7 @@ export async function seedInterview(opts: {
   source?: "desktop" | "cal" | "inperson" | "uploaded" | "meet-link";
   attendeeName?: string | null;
   attendeeCompany?: string | null;
-  status?: "scheduled" | "in-progress" | "completed";
+  status?: "scheduled" | "live" | "completed";
   transcript?: Array<{ speaker: string; text: string; timestamp: number }>;
   suggestedQuestions?: string[];
 }): Promise<string> {
@@ -209,6 +205,7 @@ export async function seedAnalystDocument(opts: {
   painPoints?: Array<Record<string, unknown>>;
   patterns?: Array<Record<string, unknown>>;
   keyQuotes?: Array<Record<string, unknown>>;
+  customerLanguage?: string[];
   saturationScore?: number;
   interviewCount?: number;
   uniquePatternCount?: number;
@@ -221,6 +218,7 @@ export async function seedAnalystDocument(opts: {
       pain_points: opts.painPoints ?? [],
       patterns: opts.patterns ?? [],
       key_quotes: opts.keyQuotes ?? [],
+      customer_language: opts.customerLanguage ?? [],
       saturation_score: opts.saturationScore ?? 0,
       interview_count: opts.interviewCount ?? 0,
       unique_pattern_count: opts.uniquePatternCount ?? 0,

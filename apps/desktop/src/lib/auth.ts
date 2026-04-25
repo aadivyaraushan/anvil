@@ -27,25 +27,70 @@ async function getTauriStore() {
 }
 
 // ---------------------------------------------------------------------------
-// Public API
+// One-time hydration: prime the in-memory Supabase client from the Tauri store.
+// Without this, supabase.from(...) calls go out without an Authorization
+// header on a fresh app launch — RLS denies them with 401, which the app
+// surfaces as "Session expired. Sign in again."
 // ---------------------------------------------------------------------------
+
+let hydratePromise: Promise<void> | null = null;
+
+async function ensureHydrated(): Promise<void> {
+  if (!isTauri()) return;
+  if (hydratePromise) return hydratePromise;
+
+  hydratePromise = (async () => {
+    const supabase = getSupabase();
+
+    // Mirror future Supabase auth changes (silent token refresh, sign-in,
+    // sign-out) back to the Tauri store so the persisted session stays
+    // current across app restarts. INITIAL_SESSION fires synchronously
+    // during registration and we don't want it clobbering the store.
+    supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === "INITIAL_SESSION") return;
+      try {
+        const store = await getTauriStore();
+        if (session) {
+          await store.set(STORE_KEY, session);
+        } else {
+          await store.delete(STORE_KEY);
+        }
+        await store.save();
+      } catch {
+        // best-effort persistence
+      }
+    });
+
+    try {
+      const store = await getTauriStore();
+      const stored = await store.get<Session>(STORE_KEY);
+      if (!stored) return;
+
+      const { data, error } = await supabase.auth.setSession({
+        access_token: stored.access_token,
+        refresh_token: stored.refresh_token,
+      });
+
+      if (error || !data.session) {
+        await store.delete(STORE_KEY);
+        await store.save();
+      }
+    } catch {
+      // ignore — fall through to unauthenticated state
+    }
+  })();
+
+  return hydratePromise;
+}
 
 /**
  * Returns the current session.
- * In Tauri: reads from the plugin store.
+ * In Tauri: hydrates the Supabase client from the plugin store on first
+ * call, then returns Supabase's in-memory session (which auto-refreshes).
  * In browser/dev: delegates to supabase.auth.getSession().
  */
 export async function getSession(): Promise<Session | null> {
-  if (isTauri()) {
-    try {
-      const store = await getTauriStore();
-      const raw = await store.get<Session>(STORE_KEY);
-      return raw ?? null;
-    } catch {
-      return null;
-    }
-  }
-
+  await ensureHydrated();
   const supabase = getSupabase();
   const {
     data: { session },
@@ -91,7 +136,11 @@ export async function clearSession(): Promise<void> {
   }
 
   const supabase = getSupabase();
-  await supabase.auth.signOut();
+  // Local-scope sign-out: only revoke this device's session. The default
+  // "global" scope kills every refresh token the user has, including
+  // sessions on other devices/browsers — almost never the intent of a
+  // user-triggered sign-out.
+  await supabase.auth.signOut({ scope: "local" });
 }
 
 /**
