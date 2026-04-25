@@ -41,7 +41,7 @@ export default defineConfig({
     // Phase 3: authenticated tests (storageState from phase 1)
     {
       name: "authenticated",
-      testMatch: /dashboard\.spec\.ts|inbox\.spec\.ts|findings\.spec\.ts|recording\.spec\.ts|offline\.spec\.ts|billing\.spec\.ts/,
+      testMatch: /dashboard\.spec\.ts|inbox\.spec\.ts|findings\.spec\.ts|recording\.spec\.ts|offline\.spec\.ts|billing\.spec\.ts|lifecycle\.spec\.ts/,
       use: {
         ...devices["Desktop Chrome"],
         storageState: "e2e/.auth/user.json",

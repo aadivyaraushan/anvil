@@ -14,7 +14,7 @@ setup("authenticate as E2E test user", async ({ page }) => {
 
   await page.locator("#email").fill(process.env.E2E_TEST_EMAIL!);
   await page.locator("#password").fill(process.env.E2E_TEST_PASSWORD!);
-  await page.getByRole("button", { name: "Log in" }).click();
+  await page.getByRole("button", { name: "Sign in" }).click();
 
   await page.waitForURL("/dashboard", { timeout: 15_000 });
   await expect(page).toHaveURL("/dashboard");
