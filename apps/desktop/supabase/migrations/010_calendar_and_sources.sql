@@ -35,12 +35,22 @@ create index if not exists idx_calendar_connections_user_id on calendar_connecti
 
 alter table calendar_connections enable row level security;
 
+-- Drop-and-recreate so the migration is idempotent on partially-applied
+-- schemas. CREATE POLICY has no IF NOT EXISTS clause, so a bare retry
+-- would error with "policy already exists".
+drop policy if exists "Users can view own calendar connection" on calendar_connections;
 create policy "Users can view own calendar connection"
   on calendar_connections for select using (auth.uid() = user_id);
+
+drop policy if exists "Users can upsert own calendar connection" on calendar_connections;
 create policy "Users can upsert own calendar connection"
   on calendar_connections for insert with check (auth.uid() = user_id);
+
+drop policy if exists "Users can update own calendar connection" on calendar_connections;
 create policy "Users can update own calendar connection"
   on calendar_connections for update using (auth.uid() = user_id);
+
+drop policy if exists "Users can delete own calendar connection" on calendar_connections;
 create policy "Users can delete own calendar connection"
   on calendar_connections for delete using (auth.uid() = user_id);
 
@@ -48,7 +58,9 @@ create policy "Users can delete own calendar connection"
 alter table user_settings
   add column if not exists desktop_connected_at timestamptz;
 
--- updated_at trigger for calendar_connections
+-- updated_at trigger for calendar_connections (idempotent — CREATE TRIGGER
+-- has no IF NOT EXISTS clause).
+drop trigger if exists calendar_connections_updated_at on calendar_connections;
 create trigger calendar_connections_updated_at
   before update on calendar_connections
   for each row execute function public.update_updated_at();
