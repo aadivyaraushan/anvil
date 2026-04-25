@@ -1,5 +1,9 @@
 import { test, expect } from "@playwright/test";
-import { cleanupProjectsForUser, getUserIdByEmail, seedProject } from "./helpers/db";
+import {
+  cleanupProjectsForUser,
+  getUserIdByEmail,
+  seedProject,
+} from "./helpers/db";
 
 let testUserId: string;
 
@@ -13,65 +17,75 @@ test.afterAll(async () => {
   await cleanupProjectsForUser(testUserId);
 });
 
+// NetworkBanner copy is driven by a GET /api/health probe. To control
+// banner state from tests we stub that endpoint; just toggling the
+// browser online/offline isn't enough on its own because the dev server
+// doesn't ship an /api/health route, so the probe always returns 4xx →
+// "Can't reach Anvil's servers" and the banner is permanently visible.
 test.describe("Offline / network resilience", () => {
-  test("offline banner appears when network is blocked", async ({
+  test("api-unreachable banner appears when health probe fails", async ({
     page,
-    context,
   }) => {
+    let healthOk = true;
+    await page.route("**/api/health", (route) =>
+      healthOk
+        ? route.fulfill({ status: 200, body: "ok" })
+        : route.fulfill({ status: 503, body: "down" }),
+    );
+
     await page.goto("/dashboard");
+    await expect(page.getByText(/can't reach anvil/i)).toHaveCount(0);
 
-    // Block all network requests to simulate offline state
-    await context.setOffline(true);
-
-    // Trigger a navigation or reload that would check network
+    healthOk = false;
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
 
-    // The NetworkBanner should appear
-    await expect(
-      page.getByText(/offline/i)
-    ).toBeVisible({ timeout: 5000 });
+    await expect(page.getByText(/can't reach anvil/i)).toBeVisible({
+      timeout: 5_000,
+    });
   });
 
-  test("online banner disappears when network is restored", async ({
-    page,
-    context,
-  }) => {
+  test("banner clears when health probe succeeds again", async ({ page }) => {
+    let healthOk = false;
+    await page.route("**/api/health", (route) =>
+      healthOk
+        ? route.fulfill({ status: 200, body: "ok" })
+        : route.fulfill({ status: 503, body: "down" }),
+    );
+
     await page.goto("/dashboard");
-
-    // Go offline
-    await context.setOffline(true);
-    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
-    await expect(page.getByText(/offline/i)).toBeVisible({ timeout: 5000 });
-
-    // Restore network
-    await context.setOffline(false);
-    await page.evaluate(() => window.dispatchEvent(new Event("online")));
-
-    // Banner should be gone
-    await expect(page.getByText(/offline/i)).not.toBeVisible({ timeout: 5000 });
-  });
-
-  test("dashboard renders cached projects while offline", async ({
-    page,
-    context,
-  }) => {
-    const projectId = await seedProject({
-      userId: testUserId,
-      name: "Cached Project",
+    await expect(page.getByText(/can't reach anvil/i)).toBeVisible({
+      timeout: 5_000,
     });
 
-    // Load while online so React Query can cache
-    await page.goto("/dashboard");
-    await expect(page.getByText("Cached Project")).toBeVisible({ timeout: 10000 });
+    healthOk = true;
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
 
-    // Go offline
+    await expect(page.getByText(/can't reach anvil/i)).toHaveCount(0, {
+      timeout: 5_000,
+    });
+  });
+
+  test("dashboard renders cached projects after going offline", async ({
+    page,
+    context,
+  }) => {
+    await seedProject({ userId: testUserId, name: "Cached Project" });
+
+    await page.route("**/api/health", (route) =>
+      route.fulfill({ status: 200, body: "ok" }),
+    );
+
+    await page.goto("/dashboard");
+    await expect(page.getByText("Cached Project")).toBeVisible({
+      timeout: 10_000,
+    });
+
     await context.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
 
-    // Project should still be visible from cache
+    // The project list is served by React Query's in-memory cache; going
+    // offline must not blank it out.
     await expect(page.getByText("Cached Project")).toBeVisible();
-
-    await cleanupProjectsForUser(testUserId);
   });
 
   test("analyst run button is disabled while offline", async ({
@@ -82,6 +96,9 @@ test.describe("Offline / network resilience", () => {
       userId: testUserId,
       name: "Offline Analyst Project",
     });
+    await page.route("**/api/health", (route) =>
+      route.fulfill({ status: 200, body: "ok" }),
+    );
     await page.goto(`/project/${projectId}`);
 
     await context.setOffline(true);
@@ -91,7 +108,5 @@ test.describe("Offline / network resilience", () => {
     if (await runBtn.isVisible()) {
       await expect(runBtn).toBeDisabled();
     }
-
-    await cleanupProjectsForUser(testUserId);
   });
 });

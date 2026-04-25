@@ -6,15 +6,25 @@ import {
   seedInterview,
   seedPersona,
   seedProject,
+  supportsRedesignSchema,
 } from "./helpers/db";
 
 let testUserId: string;
 let projectId: string;
+let schemaReady = false;
 
 test.beforeAll(async () => {
   const id = await getUserIdByEmail(process.env.E2E_TEST_EMAIL!);
   if (!id) throw new Error("E2E test user not found — did globalSetup run?");
   testUserId = id;
+  schemaReady = await supportsRedesignSchema();
+
+  // Seeding interviews + analyst document needs migrations 009/010
+  // (interviews.source/attendee_*, personas.status). Without them the
+  // setup would throw and the whole describe block would error out
+  // instead of skipping cleanly — bail early so individual tests can
+  // skip with a useful reason.
+  if (!schemaReady) return;
 
   projectId = await seedProject({
     userId: testUserId,
@@ -36,11 +46,10 @@ test.beforeAll(async () => {
     ],
   });
 
-  const personaId = await seedPersona({
+  await seedPersona({
     projectId,
     name: "Finance Leader",
     description: "Owns the month-end close",
-    // status: "suggested" (will be set if schema supports it)
   });
 
   await seedAnalystDocument({
@@ -53,9 +62,11 @@ test.beforeAll(async () => {
     },
     painPoints: [
       {
-        description: "Month-end close is too slow",
+        // FindingsRail renders `point.title` and `point.count` (severity
+        // pill + count badge) — match that shape.
+        title: "Month-end close is too slow",
+        count: 2,
         severity: "high",
-        frequency: 2,
         quotes: [
           { text: "The close takes a full week.", interview_id: interview1 },
           { text: "Nothing reconciles automatically.", interview_id: interview2 },
@@ -75,6 +86,13 @@ test.afterAll(async () => {
 });
 
 test.describe("Findings rail", () => {
+  test.beforeEach(() => {
+    test.skip(
+      !schemaReady,
+      "Requires migrations 009/010 (interviews + personas + calendar_connections).",
+    );
+  });
+
   test("findings rail shows pain points from analyst document", async ({
     page,
   }) => {
