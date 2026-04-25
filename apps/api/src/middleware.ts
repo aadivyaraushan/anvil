@@ -4,6 +4,8 @@ import { createClient } from "@supabase/supabase-js";
 const ALLOWED_ORIGINS = [
   "tauri://localhost",
   "https://anvil.app",
+  "https://app.anvil-dev.com",
+  "https://anvil-dev.com",
 ];
 const LOCALHOST_PATTERN = /^http:\/\/localhost(:\d+)?$/;
 
