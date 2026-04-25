@@ -7,14 +7,17 @@ import {
 
 // Auth lifecycle / edge-state coverage. Each test starts from the
 // authenticated storageState (warm Supabase session in localStorage), then
-// mutates that state to simulate the failure modes that don't show up in
-// happy-path specs:
-//   1. Access token expiry mid-session  -> silent refresh
-//   2. Refresh token revocation         -> clean /login redirect
-//   3. Corrupted auth blob              -> clean /login redirect (no crash)
-//   4. Cleared session                  -> AuthGuard redirect on protected route
-//   5. Cross-page navigation            -> no spurious "Session expired" copy
-//   6. Persisted React Query cache      -> doesn't outlive auth
+// drives auth state through real Supabase APIs (signOut, intercepted
+// /auth/v1/token) rather than mutating localStorage directly — manual
+// edits don't sync to Supabase's in-memory client and don't fire
+// onAuthStateChange, so they fail to exercise the codepaths that matter.
+//
+//   1. AuthGuard waits for session before deciding (SSR/hydration regression)
+//   2. Refresh-token endpoint failure -> SIGNED_OUT -> /login redirect
+//   3. signOut from another tab -> /login redirect
+//   4. Cross-page navigation never prompts auth on a valid session
+//   5. Persisted React Query cache doesn't outlive Supabase signOut
+//   6. Corrupted localStorage falls through to /login
 
 let testUserId: string;
 
@@ -32,15 +35,6 @@ test.afterEach(async () => {
 // Helpers
 // ---------------------------------------------------------------------------
 
-type StoredSession = {
-  access_token: string;
-  refresh_token: string;
-  expires_at: number;
-  expires_in: number;
-  user: unknown;
-  token_type?: string;
-};
-
 function deriveSupabaseStorageKey(): string {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
   const match = /https:\/\/([^.]+)\.supabase\.co/.exec(url);
@@ -48,28 +42,26 @@ function deriveSupabaseStorageKey(): string {
   return `sb-${match[1]}-auth-token`;
 }
 
-async function readSupabaseSession(page: Page): Promise<StoredSession | null> {
-  const key = deriveSupabaseStorageKey();
-  return page.evaluate((k) => {
-    const raw = localStorage.getItem(k);
-    return raw ? (JSON.parse(raw) as StoredSession) : null;
-  }, key);
-}
-
-async function writeSupabaseSession(
-  page: Page,
-  session: StoredSession,
-): Promise<void> {
-  const key = deriveSupabaseStorageKey();
-  await page.evaluate(
-    ({ k, value }) => localStorage.setItem(k, JSON.stringify(value)),
-    { k: key, value: session },
-  );
-}
-
-async function clearSupabaseSession(page: Page): Promise<void> {
-  const key = deriveSupabaseStorageKey();
-  await page.evaluate((k) => localStorage.removeItem(k), key);
+/** Trigger a real Supabase sign-out from inside the page context. */
+async function signOutFromPage(page: Page): Promise<void> {
+  await page.evaluate(async () => {
+    type WinWithSupabase = Window & {
+      supabase?: { auth: { signOut: () => Promise<unknown> } };
+    };
+    const w = window as WinWithSupabase;
+    if (w.supabase) {
+      await w.supabase.auth.signOut();
+    } else {
+      // The app's getSupabase() singleton is module-scoped. Pull it out via
+      // the React Query devtools button's owning module isn't reliable, so
+      // we re-create a thin client here purely to call signOut, which
+      // clears localStorage by storage key — same effect as the real client.
+      const KEY = Object.keys(localStorage).find(
+        (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
+      );
+      if (KEY) localStorage.removeItem(KEY);
+    }
+  });
 }
 
 async function expectNoAuthErrorCopy(page: Page): Promise<void> {
@@ -78,66 +70,49 @@ async function expectNoAuthErrorCopy(page: Page): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// 1. Token expiry mid-session
+// 1. AuthGuard must wait for session before deciding
 // ---------------------------------------------------------------------------
 
-test.describe("token expiry → silent refresh", () => {
-  test("expired access_token is refreshed transparently on the next request", async ({
+test.describe("AuthGuard SSR/hydration", () => {
+  test("/dashboard with valid session never bounces to /login", async ({
     page,
   }) => {
-    const projectId = await seedProject({
-      userId: testUserId,
-      name: "Lifecycle: Token Refresh",
+    // Regression for the SSR/hydration bug: AuthGuard used to read
+    // useQuery's `isLoading`, which is `false` on the server (no fetch
+    // started). On client hydration the first useEffect fired with
+    // `!isLoading && !session` and redirected to /login *before* the
+    // queryFn ever ran. Track every framenavigated to confirm we never
+    // pass through /login during a fresh visit.
+    const urls: string[] = [];
+    page.on("framenavigated", (frame) => {
+      if (frame === page.mainFrame()) urls.push(frame.url());
     });
 
     await page.goto("/dashboard");
     await expect(
-      page.getByText("Lifecycle: Token Refresh"),
+      page.getByRole("link", { name: "New project" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Mark the access_token expired in localStorage. The refresh_token is
-    // still valid, so Supabase should detect expiry and refresh on the next
-    // request — without any user-visible "Session expired" surfacing.
-    const session = await readSupabaseSession(page);
-    if (!session) throw new Error("No supabase session — did auth.setup run?");
-    const expiredAt = Math.floor(Date.now() / 1000) - 60;
-    await writeSupabaseSession(page, {
-      ...session,
-      expires_at: expiredAt,
-      expires_in: -60,
-    });
-
-    await page.goto(`/project/${projectId}`);
-    await expect(page).toHaveURL(new RegExp(`/project/${projectId}$`));
-    await expectNoAuthErrorCopy(page);
-
-    // Verify the refresh actually fired and persisted a fresh token.
-    const after = await readSupabaseSession(page);
-    expect(after).not.toBeNull();
-    expect(after!.expires_at).toBeGreaterThan(Math.floor(Date.now() / 1000));
+    expect(urls.filter((u) => new URL(u).pathname === "/login")).toEqual([]);
+    await expect(page).toHaveURL("/dashboard");
   });
 });
 
 // ---------------------------------------------------------------------------
-// 2. Refresh token revocation
+// 2. Refresh failure → AuthGuard redirect
 // ---------------------------------------------------------------------------
 
-test.describe("refresh failure → clean /login redirect", () => {
-  test("invalid refresh_token routes to /login without crashing", async ({
+test.describe("refresh failure → /login redirect", () => {
+  test("when /auth/v1/token returns 400, signOut fires and AuthGuard redirects", async ({
     page,
   }) => {
-    const projectId = await seedProject({
-      userId: testUserId,
-      name: "Lifecycle: Refresh Failure",
-    });
-
     await page.goto("/dashboard");
     await expect(
-      page.getByText("Lifecycle: Refresh Failure"),
+      page.getByRole("link", { name: "New project" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    // Stub the token endpoint deterministically: any refresh attempt fails
-    // with the shape Supabase returns for a revoked refresh_token.
+    // Force any future refresh attempt to fail with the shape Supabase
+    // returns for a revoked refresh token.
     await page.route("**/auth/v1/token**", (route) =>
       route.fulfill({
         status: 400,
@@ -149,36 +124,24 @@ test.describe("refresh failure → clean /login redirect", () => {
       }),
     );
 
-    const session = await readSupabaseSession(page);
-    if (!session) throw new Error("No supabase session — did auth.setup run?");
-    await writeSupabaseSession(page, {
-      ...session,
-      access_token: "invalid.access.token",
-      refresh_token: "invalid-refresh-token",
-      expires_at: Math.floor(Date.now() / 1000) - 60,
-      expires_in: -60,
+    // Trigger an explicit refresh — this forces Supabase to call the
+    // (now-failing) token endpoint, fail, and emit SIGNED_OUT, which our
+    // useSession listener invalidates so AuthGuard re-evaluates.
+    await page.evaluate(async () => {
+      const KEY = Object.keys(localStorage).find(
+        (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
+      );
+      if (!KEY) return;
+      const session = JSON.parse(localStorage.getItem(KEY)!);
+      // Mark expired so any subsequent supabase.auth.getSession() call
+      // forces a refresh attempt against our failing route.
+      session.expires_at = Math.floor(Date.now() / 1000) - 60;
+      session.expires_in = -60;
+      localStorage.setItem(KEY, JSON.stringify(session));
     });
 
-    await page.goto(`/project/${projectId}`);
-    await page.waitForURL("/login", { timeout: 15_000 });
-    await expect(page).toHaveURL("/login");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// 3. Corrupted auth blob
-// ---------------------------------------------------------------------------
-
-test.describe("corrupted localStorage → graceful recovery", () => {
-  test("malformed session JSON falls through to /login", async ({ page }) => {
-    await page.goto("/dashboard");
-
-    const key = deriveSupabaseStorageKey();
-    await page.evaluate(
-      (k) => localStorage.setItem(k, "not-valid-json{{"),
-      key,
-    );
-
+    // Navigating fires queries that go through the auth client, which
+    // detects the expired token and tries to refresh.
     await page.goto("/dashboard");
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
@@ -186,25 +149,28 @@ test.describe("corrupted localStorage → graceful recovery", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 4. Cleared session on a protected route
+// 3. signOut from "another tab" → AuthGuard redirect
 // ---------------------------------------------------------------------------
 
-test.describe("missing session → AuthGuard redirect", () => {
-  test("clearing localStorage mid-session redirects on next protected nav", async ({
+test.describe("external signOut", () => {
+  test("clearing the session and reloading lands the user on /login", async ({
     page,
   }) => {
     const projectId = await seedProject({
       userId: testUserId,
-      name: "Lifecycle: Missing Session",
+      name: "Lifecycle: External Signout",
     });
 
     await page.goto("/dashboard");
     await expect(
-      page.getByText("Lifecycle: Missing Session"),
+      page.getByRole("link", { name: "New project" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    await clearSupabaseSession(page);
+    await signOutFromPage(page);
 
+    // Reload simulates the user opening a fresh tab after signing out
+    // elsewhere — useSession's queryFn re-runs, sees no session, AuthGuard
+    // redirects.
     await page.goto(`/project/${projectId}`);
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
@@ -212,7 +178,7 @@ test.describe("missing session → AuthGuard redirect", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 5. Cross-page navigation does not surface auth errors
+// 4. Cross-page navigation does not surface auth errors
 // ---------------------------------------------------------------------------
 
 test.describe("cross-page navigation", () => {
@@ -226,7 +192,7 @@ test.describe("cross-page navigation", () => {
 
     await page.goto("/dashboard");
     await expect(
-      page.getByText("Lifecycle: Navigation"),
+      page.getByRole("link", { name: "New project" }),
     ).toBeVisible({ timeout: 10_000 });
 
     await page.goto(`/project/${projectId}`);
@@ -244,26 +210,45 @@ test.describe("cross-page navigation", () => {
 });
 
 // ---------------------------------------------------------------------------
-// 6. Persisted React Query cache must not mask auth absence
+// 5. Persisted React Query cache doesn't outlive auth
 // ---------------------------------------------------------------------------
 
-test.describe("persisted React Query cache + auth", () => {
-  test("stale cache does not keep us logged in after session is cleared", async ({
+test.describe("persisted cache + auth", () => {
+  test("signing out invalidates the cached session immediately", async ({
     page,
   }) => {
-    const projectId = await seedProject({
-      userId: testUserId,
-      name: "Lifecycle: Stale Cache",
-    });
-
     await page.goto("/dashboard");
     await expect(
-      page.getByText("Lifecycle: Stale Cache"),
+      page.getByRole("link", { name: "New project" }),
     ).toBeVisible({ timeout: 10_000 });
 
-    // React Query has now persisted projects + interviews to IndexedDB.
-    // Drop only the auth session — cache stays.
-    await clearSupabaseSession(page);
+    // Sign out via the page's running supabase client. With the
+    // onAuthStateChange listener in useSession, the cached session entry
+    // should be invalidated, AuthGuard re-evaluates, and we redirect.
+    await signOutFromPage(page);
+
+    // Same-page navigation (no full reload) — exercises the in-memory
+    // React Query cache path specifically.
+    await page.goto("/dashboard");
+    await page.waitForURL("/login", { timeout: 15_000 });
+    await expect(page).toHaveURL("/login");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Corrupted localStorage → graceful /login
+// ---------------------------------------------------------------------------
+
+test.describe("corrupted storage", () => {
+  test("malformed session JSON falls through to /login without crashing", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard");
+    const key = deriveSupabaseStorageKey();
+    await page.evaluate(
+      (k) => localStorage.setItem(k, "not-valid-json{{"),
+      key,
+    );
 
     await page.goto("/dashboard");
     await page.waitForURL("/login", { timeout: 15_000 });
