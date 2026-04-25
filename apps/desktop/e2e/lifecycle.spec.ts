@@ -141,8 +141,9 @@ test.describe("refresh failure → /login redirect", () => {
     });
 
     // Navigating fires queries that go through the auth client, which
-    // detects the expired token and tries to refresh.
-    await page.goto("/dashboard");
+    // detects the expired token and tries to refresh. (Webkit can fire
+    // the redirect before the goto resolves — swallow the interrupt.)
+    await page.goto("/dashboard").catch(() => {});
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
   });
@@ -170,8 +171,10 @@ test.describe("external signOut", () => {
 
     // Reload simulates the user opening a fresh tab after signing out
     // elsewhere — useSession's queryFn re-runs, sees no session, AuthGuard
-    // redirects.
-    await page.goto(`/project/${projectId}`);
+    // redirects. On Webkit the redirect fires fast enough to interrupt
+    // the goto (Chromium completes the load first); the interrupt is
+    // exactly the behavior we're testing for, so swallow it.
+    await page.goto(`/project/${projectId}`).catch(() => {});
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
   });
@@ -228,8 +231,9 @@ test.describe("persisted cache + auth", () => {
     await signOutFromPage(page);
 
     // Same-page navigation (no full reload) — exercises the in-memory
-    // React Query cache path specifically.
-    await page.goto("/dashboard");
+    // React Query cache path specifically. Webkit's redirect can
+    // interrupt the goto; the interrupt is the behavior we're asserting.
+    await page.goto("/dashboard").catch(() => {});
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
   });
@@ -250,7 +254,7 @@ test.describe("corrupted storage", () => {
       key,
     );
 
-    await page.goto("/dashboard");
+    await page.goto("/dashboard").catch(() => {});
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
   });
