@@ -15,9 +15,9 @@ function getHealthUrl(): string {
   return `${base}/api/health`
 }
 
+// navigator.onLine is unreliable in Tauri's WKWebView on macOS — it can stay
+// false even with active connectivity. Source of truth is the actual probe.
 async function pollHealth(): Promise<NetworkStatus> {
-  if (!navigator.onLine) return 'offline'
-
   try {
     const res = await fetch(getHealthUrl(), { method: 'GET', cache: 'no-store' })
     if (res.ok) return 'online'
@@ -25,14 +25,12 @@ async function pollHealth(): Promise<NetworkStatus> {
     if (res.status === 429) return 'rate-limited'
     return 'api-unreachable'
   } catch {
-    return navigator.onLine ? 'api-unreachable' : 'offline'
+    return 'api-unreachable'
   }
 }
 
 export function useNetworkStatus(): { status: NetworkStatus; lastChecked: Date | null } {
-  const [status, setStatus] = useState<NetworkStatus>(
-    typeof navigator !== 'undefined' && !navigator.onLine ? 'offline' : 'online'
-  )
+  const [status, setStatus] = useState<NetworkStatus>('online')
   const [lastChecked, setLastChecked] = useState<Date | null>(null)
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -44,7 +42,7 @@ export function useNetworkStatus(): { status: NetworkStatus; lastChecked: Date |
 
   useEffect(() => {
     const onOnline = () => { check() }
-    const onOffline = () => { setStatus('offline'); setLastChecked(new Date()) }
+    const onOffline = () => { check() }
 
     window.addEventListener('online', onOnline)
     window.addEventListener('offline', onOffline)
