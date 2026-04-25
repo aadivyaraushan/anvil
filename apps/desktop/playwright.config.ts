@@ -14,7 +14,7 @@ const CROSS_BROWSER_SMOKE_SPECS =
   /dashboard\.spec\.ts|recording\.spec\.ts|lifecycle\.spec\.ts/;
 
 const AUTHENTICATED_SPECS =
-  /dashboard\.spec\.ts|inbox\.spec\.ts|findings\.spec\.ts|recording\.spec\.ts|offline\.spec\.ts|billing\.spec\.ts|lifecycle\.spec\.ts|interview-flow\.spec\.ts|multi-user\.spec\.ts|recovery\.spec\.ts|data-edge-cases\.spec\.ts|async-pipelines\.spec\.ts|tauri-shell\.spec\.ts/;
+  /dashboard\.spec\.ts|inbox\.spec\.ts|findings\.spec\.ts|recording\.spec\.ts|offline\.spec\.ts|billing\.spec\.ts|lifecycle\.spec\.ts|interview-flow\.spec\.ts|multi-user\.spec\.ts|recovery\.spec\.ts|data-edge-cases\.spec\.ts|async-pipelines\.spec\.ts|tauri-shell\.spec\.ts|transcript-pipeline\.spec\.ts/;
 
 export default defineConfig({
   testDir: "./e2e",

@@ -176,7 +176,7 @@ export async function seedInterview(opts: {
   source?: "desktop" | "cal" | "inperson" | "uploaded" | "meet-link";
   attendeeName?: string | null;
   attendeeCompany?: string | null;
-  status?: "scheduled" | "in-progress" | "completed";
+  status?: "scheduled" | "live" | "completed";
   transcript?: Array<{ speaker: string; text: string; timestamp: number }>;
   suggestedQuestions?: string[];
 }): Promise<string> {
