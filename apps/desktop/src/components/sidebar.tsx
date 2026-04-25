@@ -18,7 +18,11 @@ export function Sidebar() {
 
   async function handleLogout() {
     const supabase = createClient();
-    await supabase.auth.signOut();
+    // scope: "local" — only sign this device out. The default "global"
+    // revokes every refresh token the user has, including ones in use
+    // on other devices / browser tabs, which is almost never what the
+    // user actually wants from the sidebar Log out button.
+    await supabase.auth.signOut({ scope: "local" });
     router.push("/login");
     router.refresh();
   }

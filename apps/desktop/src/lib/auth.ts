@@ -136,7 +136,11 @@ export async function clearSession(): Promise<void> {
   }
 
   const supabase = getSupabase();
-  await supabase.auth.signOut();
+  // Local-scope sign-out: only revoke this device's session. The default
+  // "global" scope kills every refresh token the user has, including
+  // sessions on other devices/browsers — almost never the intent of a
+  // user-triggered sign-out.
+  await supabase.auth.signOut({ scope: "local" });
 }
 
 /**

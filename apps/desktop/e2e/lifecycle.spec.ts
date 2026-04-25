@@ -42,25 +42,30 @@ function deriveSupabaseStorageKey(): string {
   return `sb-${match[1]}-auth-token`;
 }
 
-/** Trigger a real Supabase sign-out from inside the page context. */
+/**
+ * Simulate "user signed out elsewhere": tear down the locally cached
+ * session AND the persisted React Query cache. We don't have direct
+ * access to the app's getSupabase() singleton from the browser context,
+ * so we drop both stores manually. The next page mount will read empty
+ * localStorage → supabase.auth.getSession() returns null → AuthGuard
+ * redirects.
+ */
 async function signOutFromPage(page: Page): Promise<void> {
   await page.evaluate(async () => {
-    type WinWithSupabase = Window & {
-      supabase?: { auth: { signOut: () => Promise<unknown> } };
-    };
-    const w = window as WinWithSupabase;
-    if (w.supabase) {
-      await w.supabase.auth.signOut();
-    } else {
-      // The app's getSupabase() singleton is module-scoped. Pull it out via
-      // the React Query devtools button's owning module isn't reliable, so
-      // we re-create a thin client here purely to call signOut, which
-      // clears localStorage by storage key — same effect as the real client.
-      const KEY = Object.keys(localStorage).find(
-        (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
-      );
-      if (KEY) localStorage.removeItem(KEY);
-    }
+    const KEY = Object.keys(localStorage).find(
+      (k) => k.startsWith("sb-") && k.endsWith("-auth-token"),
+    );
+    if (KEY) localStorage.removeItem(KEY);
+    // Clear React Query's persisted cache too — otherwise the rehydrated
+    // ['auth', 'session'] entry (with 5-min staleTime) keeps AuthGuard
+    // happy and our redirect assertion never fires. Use idb default
+    // database name + the persistence key from query-persistence.ts.
+    await new Promise<void>((resolve) => {
+      const req = indexedDB.deleteDatabase("keyval-store");
+      req.onsuccess = () => resolve();
+      req.onerror = () => resolve();
+      req.onblocked = () => resolve();
+    });
   });
 }
 

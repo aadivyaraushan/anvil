@@ -161,6 +161,7 @@ export function usePersonas(projectId: string) {
       if (error) throw error;
       return data as Persona[];
     },
+    refetchOnMount: "always",
     enabled: Boolean(projectId),
   });
 }
@@ -222,5 +223,9 @@ export function useAnalystDocument(projectId: string) {
       return (data as AnalystDocument) ?? null;
     },
     enabled: Boolean(projectId),
+    // Server-side analyst pipeline writes out-of-band; refetch on mount
+    // so the findings rail reflects the latest run instead of serving
+    // a stale "no findings yet" view from cache.
+    refetchOnMount: "always",
   });
 }
