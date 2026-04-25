@@ -1,7 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { Plus, Link as LinkIcon } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Link as LinkIcon, ChevronLeft } from 'lucide-react'
 import { useInterviews } from '@/lib/hooks/use-interviews'
 import { useProject } from '@/lib/hooks/use-projects'
 import { useCreateInterview } from '@/lib/hooks/use-interviews'
@@ -289,6 +290,13 @@ export function InterviewInbox({
     <aside className="flex flex-col overflow-hidden h-full">
       {/* Header */}
       <div className="px-[18px] py-[18px] pb-3.5 border-b border-border">
+        <Link
+          href="/dashboard"
+          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors inline-flex items-center gap-0.5 mb-1.5 -ml-1"
+        >
+          <ChevronLeft className="w-3 h-3" />
+          All projects
+        </Link>
         <div className="font-semibold text-[15px] tracking-[-0.02em]">
           {project?.name ?? 'Loading…'}
         </div>
