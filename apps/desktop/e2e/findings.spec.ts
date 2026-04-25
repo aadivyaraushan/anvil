@@ -56,10 +56,10 @@ test.beforeAll(async () => {
     projectId,
     content: {
       summary: "Manual reconciliation is the top pain point.",
-      customerLanguage: ["manual reconciliation", "week-long close"],
       recommendations: ["Lead with automation."],
       personas: [],
     },
+    customerLanguage: ["manual reconciliation", "week-long close"],
     painPoints: [
       {
         // FindingsRail renders `point.title` and `point.count` (severity
@@ -98,8 +98,10 @@ test.describe("Findings rail", () => {
   }) => {
     await page.goto(`/project/${projectId}`);
 
-    // Right rail should render
-    await expect(page.getByText("Findings")).toBeVisible();
+    // Right rail should render. Use exact match — "findings" also
+    // appears in the empty-state copy ("Needs connection to generate
+    // findings.").
+    await expect(page.getByText("Findings", { exact: true })).toBeVisible();
     await expect(page.getByText(/month-end close/i)).toBeVisible();
   });
 

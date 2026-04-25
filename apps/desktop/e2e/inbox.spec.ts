@@ -81,7 +81,9 @@ test.describe("Direction C — Interview Inbox", () => {
 
     const projectId = await seedProject({
       userId: testUserId,
-      name: "Processed Interviews",
+      // Avoid project names containing "Processed" — collides with the
+      // section header locator below.
+      name: "Closed Interviews Project",
     });
     await seedInterview({
       projectId,
@@ -92,7 +94,7 @@ test.describe("Direction C — Interview Inbox", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await expect(page.getByText("Processed")).toBeVisible();
+    await expect(page.getByText("Processed", { exact: true })).toBeVisible();
   });
 
   test("clicking interview row selects it in canvas", async ({ page }) => {
