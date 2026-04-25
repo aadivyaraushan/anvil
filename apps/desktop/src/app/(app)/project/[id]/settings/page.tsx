@@ -56,10 +56,16 @@ export default function ProjectSettingsPage({
 
   return (
     <div className="p-8 max-w-2xl space-y-6">
-      <div className="mb-6">
+      <div className="mb-6 flex items-center gap-1">
+        <Link href="/dashboard">
+          <Button variant="ghost" size="sm">
+            ← All projects
+          </Button>
+        </Link>
+        <span className="text-muted-foreground/50 text-sm">/</span>
         <Link href={`/project/${id}`}>
           <Button variant="ghost" size="sm">
-            ← Back to workspace
+            Back to workspace
           </Button>
         </Link>
       </div>
