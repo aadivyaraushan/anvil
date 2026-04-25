@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useUser } from "@/lib/hooks/use-auth";
 import { getSupabase } from "@/lib/supabase/client";
 import { mapError } from "@/lib/errors";
@@ -11,11 +11,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export default function SettingsPage() {
   const user = useUser();
-  const qc = useQueryClient();
   const [calendarConnecting, setCalendarConnecting] = useState(false);
-  const [saved, setSaved] = useState(false);
 
-  const { data: settings, error, isLoading } = useQuery({
+  const { error, isLoading } = useQuery({
     queryKey: ["user_settings", user?.id],
     enabled: !!user?.id,
     queryFn: async () => {
@@ -39,17 +37,6 @@ export default function SettingsPage() {
         .eq("user_id", user!.id)
         .maybeSingle();
       return data;
-    },
-  });
-
-  const saveMutation = useMutation({
-    mutationFn: async () => {
-      // settings are read-only for now — desktop_connected_at is set by the app
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["user_settings"] });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
     },
   });
 
@@ -109,39 +96,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* Desktop app */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Desktop app</CardTitle>
-          <CardDescription>
-            The Anvil Mac app captures mic + system audio for any conversation.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="flex items-center justify-between">
-          <div className="flex items-center gap-2 text-sm">
-            {settings?.desktop_connected_at ? (
-              <>
-                <span className="size-2 rounded-full bg-rose inline-block" />
-                <span className="text-muted-foreground">
-                  Connected{" "}
-                  {new Date(settings.desktop_connected_at).toLocaleDateString()}
-                </span>
-              </>
-            ) : (
-              <span className="text-muted-foreground">Not connected</span>
-            )}
-          </div>
-          <a
-            href="https://releases.anvil.app/Anvil-latest.dmg"
-            target="_blank"
-            rel="noreferrer"
-            className="inline-flex items-center h-7 px-2.5 text-[0.8rem] rounded-[min(var(--radius-md),12px)] border border-border bg-background hover:bg-muted hover:text-foreground"
-          >
-            Download for Mac
-          </a>
-        </CardContent>
-      </Card>
-
       {/* Google Calendar */}
       <Card>
         <CardHeader>
@@ -173,9 +127,6 @@ export default function SettingsPage() {
         </CardContent>
       </Card>
 
-      {saved && (
-        <p className="text-sm text-muted-foreground">Saved.</p>
-      )}
     </div>
   );
 }
