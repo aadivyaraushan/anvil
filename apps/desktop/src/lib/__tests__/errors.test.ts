@@ -42,4 +42,36 @@ describe('mapError', () => {
     const original = new AnvilError(ErrorCode.NOT_FOUND)
     expect(mapError(original)).toBe(original)
   })
+
+  it('surfaces the server message for uncategorized 4xx (e.g. Supabase 400)', () => {
+    const supabaseAuthError = Object.assign(new Error('Invalid login credentials'), {
+      status: 400,
+    })
+    const mapped = mapError(supabaseAuthError)
+    expect(mapped.code).toBe(ErrorCode.UNKNOWN)
+    expect(mapped.userMessage).toBe('Invalid login credentials')
+  })
+
+  it('truncates very long passthrough messages', () => {
+    const longMsg = 'x'.repeat(500)
+    const err = Object.assign(new Error(longMsg), { status: 422 })
+    const mapped = mapError(err)
+    expect(mapped.userMessage.length).toBeLessThanOrEqual(201)
+    expect(mapped.userMessage.endsWith('…')).toBe(true)
+  })
+
+  it('keeps generic copy for 4xx with no usable message', () => {
+    const err = Object.assign(new Error(''), { status: 418 })
+    const mapped = mapError(err)
+    expect(mapped.userMessage).toBe('An unexpected error occurred.')
+  })
+
+  it('does not pass through 5xx server messages', () => {
+    const err = Object.assign(new Error('Database exploded: connection pool exhausted at line 42'), {
+      status: 500,
+    })
+    const mapped = mapError(err)
+    expect(mapped.code).toBe(ErrorCode.SERVER_ERROR)
+    expect(mapped.userMessage).toBe("Something went wrong on our end. We're looking into it.")
+  })
 })

@@ -30,11 +30,12 @@ export class AnvilError extends Error {
   readonly userMessage: string
   readonly retryable: boolean
 
-  constructor(code: ErrorCode, cause?: unknown) {
-    super(USER_MESSAGES[code])
+  constructor(code: ErrorCode, cause?: unknown, userMessage?: string) {
+    const message = userMessage ?? USER_MESSAGES[code]
+    super(message)
     this.name = 'AnvilError'
     this.code = code
-    this.userMessage = USER_MESSAGES[code]
+    this.userMessage = message
     this.retryable = RETRYABLE.has(code)
     if (cause instanceof Error) this.cause = cause
   }
@@ -46,6 +47,15 @@ function codeFromStatus(status: number): ErrorCode {
   if (status === 429) return ErrorCode.RATE_LIMITED
   if (status >= 500) return ErrorCode.SERVER_ERROR
   return ErrorCode.UNKNOWN
+}
+
+const MAX_PASSTHROUGH_LENGTH = 200
+
+function passthroughMessage(err: unknown): string | null {
+  if (!(err instanceof Error)) return null
+  const raw = err.message?.trim()
+  if (!raw) return null
+  return raw.length > MAX_PASSTHROUGH_LENGTH ? raw.slice(0, MAX_PASSTHROUGH_LENGTH) + '…' : raw
 }
 
 export function mapError(err: unknown): AnvilError {
@@ -62,7 +72,15 @@ export function mapError(err: unknown): AnvilError {
   if (err instanceof Error && 'status' in err) {
     const status = (err as Error & { status: number }).status
     if (typeof status === 'number') {
-      return new AnvilError(codeFromStatus(status), err)
+      const code = codeFromStatus(status)
+      // Uncategorized 4xx (e.g. Supabase auth 400 "Invalid login credentials")
+      // is user-correctable — surface the server's message instead of the
+      // generic "An unexpected error occurred."
+      if (code === ErrorCode.UNKNOWN && status >= 400 && status < 500) {
+        const message = passthroughMessage(err)
+        if (message) return new AnvilError(code, err, message)
+      }
+      return new AnvilError(code, err)
     }
   }
 
