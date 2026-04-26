@@ -19,6 +19,24 @@
  */
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
+// The route hands the Deepgram pipeline to Next's `after()` so it survives
+// past Response.json on serverless. `after()` requires a request scope at
+// runtime, which we don't have in vitest — stub it to start the promise
+// immediately. Tests still flush with `await new Promise(setImmediate)`.
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    after: (work: Promise<unknown> | (() => Promise<unknown>)) => {
+      const p = typeof work === "function" ? work() : work;
+      // Swallow rejections — the route's background work owns its own
+      // failure handling (writes upload_status='failed'). An unhandled
+      // rejection here would just be the route's own catch path running.
+      void Promise.resolve(p).catch(() => {});
+    },
+  };
+});
+
 const VALID_TOKEN = "test.bearer.jwt";
 const USER_ID = "user-aaa";
 const PROJECT_ID = "proj-bbb";

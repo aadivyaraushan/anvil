@@ -1,89 +1,161 @@
 /**
- * Unit tests for the 1-external-attendee filter used by the calendar ingest.
- * An event qualifies if it has exactly one attendee whose email domain differs
- * from the organiser's domain (i.e. a founder's customer call, not an internal).
+ * Unit tests for the 1-external-attendee filter used by calendar ingest.
+ * These import the real helper from src/lib/calendar/filter.ts — no mirroring.
  */
 import { describe, expect, it } from "vitest";
+import {
+  emailDomain,
+  filterOneExternalAttendeeEvents,
+  type CalendarEventInput,
+} from "@/lib/calendar/filter";
 
-type Attendee = { email: string; self?: boolean; responseStatus?: string };
-type CalendarEvent = {
-  summary?: string;
-  organizer?: { email: string };
-  attendees?: Attendee[];
-};
+const NOW = new Date("2026-04-25T12:00:00Z");
 
-/**
- * Mirrors the logic in apps/api/src/app/api/calendar/google/events/route.ts.
- * Returns true if the event has exactly one external attendee.
- */
-function hasOneExternalAttendee(
-  event: CalendarEvent,
-  organizerDomain: string
-): boolean {
-  if (!event.attendees || event.attendees.length < 2) return false;
-  const external = event.attendees.filter(
-    (a) => !a.self && !a.email.endsWith(`@${organizerDomain}`)
-  );
-  return external.length === 1;
+function event(partial: Partial<CalendarEventInput>): CalendarEventInput {
+  return {
+    id: "evt",
+    summary: "Meeting",
+    start: { dateTime: "2026-04-26T15:00:00Z" },
+    attendees: [],
+    ...partial,
+  };
 }
 
-describe("calendar 1-external-attendee filter", () => {
-  const organizerDomain = "anvil.app";
-
-  it("returns true when exactly one external attendee", () => {
-    const event: CalendarEvent = {
-      organizer: { email: "founder@anvil.app" },
-      attendees: [
-        { email: "founder@anvil.app", self: true },
-        { email: "sarah@customer.com" },
-      ],
-    };
-    expect(hasOneExternalAttendee(event, organizerDomain)).toBe(true);
+describe("emailDomain", () => {
+  it("returns the lowercased domain", () => {
+    expect(emailDomain("Founder@Acme.IO")).toBe("acme.io");
   });
 
-  it("returns false when all attendees are internal", () => {
-    const event: CalendarEvent = {
-      organizer: { email: "founder@anvil.app" },
-      attendees: [
-        { email: "founder@anvil.app", self: true },
-        { email: "teammate@anvil.app" },
-      ],
-    };
-    expect(hasOneExternalAttendee(event, organizerDomain)).toBe(false);
+  it("returns empty string when there is no @", () => {
+    expect(emailDomain("garbage")).toBe("");
+  });
+});
+
+describe("filterOneExternalAttendeeEvents", () => {
+  it("keeps events with exactly one external attendee", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        id: "1",
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: "lead@customer.com", displayName: "Pat Lead" },
+        ],
+      }),
+    ];
+    const out = filterOneExternalAttendeeEvents(events, "anvil.app", NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0]).toMatchObject({
+      id: "1",
+      attendee_name: "Pat Lead",
+      attendee_company: "customer.com",
+      source: "cal",
+      status: "upcoming",
+    });
   });
 
-  it("returns false when two external attendees (group call)", () => {
-    const event: CalendarEvent = {
-      organizer: { email: "founder@anvil.app" },
-      attendees: [
-        { email: "founder@anvil.app", self: true },
-        { email: "sarah@customer.com" },
-        { email: "alex@other.com" },
-      ],
-    };
-    expect(hasOneExternalAttendee(event, organizerDomain)).toBe(false);
+  it("drops internal-only events", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        attendees: [
+          { email: "a@anvil.app", self: true },
+          { email: "b@anvil.app" },
+        ],
+      }),
+    ];
+    expect(filterOneExternalAttendeeEvents(events, "anvil.app", NOW)).toEqual([]);
   });
 
-  it("returns false when no attendees", () => {
-    const event: CalendarEvent = {
-      organizer: { email: "founder@anvil.app" },
-      attendees: [],
-    };
-    expect(hasOneExternalAttendee(event, organizerDomain)).toBe(false);
+  it("drops events with multiple externals (panels, all-hands)", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: "a@x.com" },
+          { email: "b@y.com" },
+        ],
+      }),
+    ];
+    expect(filterOneExternalAttendeeEvents(events, "anvil.app", NOW)).toEqual([]);
   });
 
-  it("returns false when only the self attendee", () => {
-    const event: CalendarEvent = {
-      organizer: { email: "founder@anvil.app" },
-      attendees: [{ email: "founder@anvil.app", self: true }],
-    };
-    expect(hasOneExternalAttendee(event, organizerDomain)).toBe(false);
+  it("ignores attendees flagged self even if domain differs", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        attendees: [
+          { email: "founder@personal.me", self: true },
+          { email: "lead@customer.com" },
+        ],
+      }),
+    ];
+    const out = filterOneExternalAttendeeEvents(events, "anvil.app", NOW);
+    expect(out).toHaveLength(1);
+    expect(out[0].attendee_company).toBe("customer.com");
   });
 
-  it("handles events without an attendees list", () => {
-    const event: CalendarEvent = {
-      organizer: { email: "founder@anvil.app" },
-    };
-    expect(hasOneExternalAttendee(event, organizerDomain)).toBe(false);
+  it("marks past events as done", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        start: { dateTime: "2026-04-20T10:00:00Z" },
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: "lead@customer.com" },
+        ],
+      }),
+    ];
+    expect(filterOneExternalAttendeeEvents(events, "anvil.app", NOW)[0].status).toBe("done");
+  });
+
+  it("handles all-day events (date, not dateTime)", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        start: { date: "2026-05-01" },
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: "lead@customer.com" },
+        ],
+      }),
+    ];
+    const out = filterOneExternalAttendeeEvents(events, "anvil.app", NOW);
+    expect(out[0].start).toBe("2026-05-01");
+    expect(out[0].status).toBe("upcoming");
+  });
+
+  it("falls back to email when displayName is absent", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: "lead@customer.com" },
+        ],
+      }),
+    ];
+    expect(filterOneExternalAttendeeEvents(events, "anvil.app", NOW)[0].attendee_name).toBe(
+      "lead@customer.com"
+    );
+  });
+
+  it("skips attendees with no email rather than crashing", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: null, displayName: "Mystery Guest" },
+        ],
+      }),
+    ];
+    expect(filterOneExternalAttendeeEvents(events, "anvil.app", NOW)).toEqual([]);
+  });
+
+  it("uses '(No title)' when summary is missing", () => {
+    const events: CalendarEventInput[] = [
+      event({
+        summary: null,
+        attendees: [
+          { email: "founder@anvil.app", self: true },
+          { email: "lead@customer.com" },
+        ],
+      }),
+    ];
+    expect(filterOneExternalAttendeeEvents(events, "anvil.app", NOW)[0].summary).toBe("(No title)");
   });
 });

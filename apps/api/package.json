@@ -9,7 +9,7 @@
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run src/__tests__/unit",
-    "test:integration": "vitest run --passWithNoTests src/__tests__/integration"
+    "test:integration": "vitest run src/__tests__/integration"
   },
   "dependencies": {
     "@deepgram/sdk": "^5.0.0",

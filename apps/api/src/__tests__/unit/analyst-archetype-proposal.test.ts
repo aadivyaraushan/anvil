@@ -1,81 +1,73 @@
 /**
  * Unit tests for the analyst archetype-proposal threshold.
  *
- * The analyst should propose archetypes (status = 'suggested') when:
- * - There are ≥2 completed interviews for the project, AND
- * - No confirmed personas exist yet.
+ * Imports the real `shouldProposeArchetypes` helper used by the analyst graph
+ * (lib/agents/analyst/proposal.ts and lib/agents/analyst/nodes.ts). The
+ * previous version of this file inlined a copy of the logic, which silently
+ * drifted from the real condition.
  */
 import { describe, expect, it } from "vitest";
+import {
+  MIN_COMPLETED_INTERVIEWS_FOR_PROPOSAL,
+  shouldProposeArchetypes,
+} from "@/lib/agents/analyst/proposal";
 
-type Persona = { status: "suggested" | "confirmed" };
-type Interview = { status: string };
-
-function shouldProposeArchetypes(
-  interviews: Interview[],
-  existingPersonas: Persona[]
-): boolean {
-  const completed = interviews.filter((i) => i.status === "completed").length;
-  const hasConfirmed = existingPersonas.some((p) => p.status === "confirmed");
-  return completed >= 2 && !hasConfirmed;
-}
-
-describe("analyst archetype proposal threshold", () => {
-  it("proposes when ≥2 completed interviews and no personas", () => {
+describe("shouldProposeArchetypes", () => {
+  it("proposes when ≥2 completed interviews and no personas exist", () => {
     expect(
-      shouldProposeArchetypes(
-        [{ status: "completed" }, { status: "completed" }],
-        []
-      )
+      shouldProposeArchetypes({
+        completedInterviewCount: 2,
+        existingPersonas: [],
+      })
     ).toBe(true);
   });
 
-  it("proposes when ≥2 completed and only suggested personas exist", () => {
+  it("does NOT propose when only suggested personas exist (user is mid-shaping)", () => {
     expect(
-      shouldProposeArchetypes(
-        [{ status: "completed" }, { status: "completed" }],
-        [{ status: "suggested" }]
-      )
-    ).toBe(true);
-  });
-
-  it("does NOT propose when fewer than 2 completed interviews", () => {
-    expect(
-      shouldProposeArchetypes([{ status: "completed" }], [])
+      shouldProposeArchetypes({
+        completedInterviewCount: 5,
+        existingPersonas: [{ status: "suggested" }],
+      })
     ).toBe(false);
   });
 
-  it("does NOT propose when confirmed personas already exist", () => {
+  it("does NOT propose when confirmed personas exist", () => {
     expect(
-      shouldProposeArchetypes(
-        [{ status: "completed" }, { status: "completed" }],
-        [{ status: "confirmed" }]
-      )
+      shouldProposeArchetypes({
+        completedInterviewCount: 5,
+        existingPersonas: [{ status: "confirmed" }],
+      })
+    ).toBe(false);
+  });
+
+  it("does NOT propose under the interview threshold", () => {
+    expect(
+      shouldProposeArchetypes({
+        completedInterviewCount: MIN_COMPLETED_INTERVIEWS_FOR_PROPOSAL - 1,
+        existingPersonas: [],
+      })
     ).toBe(false);
   });
 
   it("does NOT propose with 0 interviews", () => {
-    expect(shouldProposeArchetypes([], [])).toBe(false);
-  });
-
-  it("does NOT propose when interviews are pending/scheduled but not completed", () => {
     expect(
-      shouldProposeArchetypes(
-        [{ status: "scheduled" }, { status: "in-progress" }],
-        []
-      )
+      shouldProposeArchetypes({
+        completedInterviewCount: 0,
+        existingPersonas: [],
+      })
     ).toBe(false);
   });
 
-  it("proposes with 3+ completed interviews", () => {
+  it("proposes well above the threshold", () => {
     expect(
-      shouldProposeArchetypes(
-        [
-          { status: "completed" },
-          { status: "completed" },
-          { status: "completed" },
-        ],
-        []
-      )
+      shouldProposeArchetypes({
+        completedInterviewCount: 12,
+        existingPersonas: [],
+      })
     ).toBe(true);
+  });
+
+  it("threshold constant is the documented value (2)", () => {
+    expect(MIN_COMPLETED_INTERVIEWS_FOR_PROPOSAL).toBe(2);
   });
 });
