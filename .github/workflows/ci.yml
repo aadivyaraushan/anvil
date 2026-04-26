@@ -152,7 +152,7 @@ jobs:
 
       - name: Install Playwright
         working-directory: apps/desktop
-        run: pnpm dlx playwright install --with-deps chromium
+        run: pnpm dlx playwright install --with-deps
 
       - name: Run E2E tests
         working-directory: apps/desktop

@@ -36,7 +36,7 @@ test.describe("Direction C — Interview Inbox", () => {
 
     // Left rail: the inbox shows the "Add interview" affordance.
     await expect(
-      page.getByRole("button", { name: /add interview/i }),
+      page.getByRole("button", { name: /add conversation/i }),
     ).toBeVisible();
     // Right rail: findings header. Use exact match — "findings" also
     // appears in the empty-state copy ("Needs connection to generate
@@ -55,7 +55,7 @@ test.describe("Direction C — Interview Inbox", () => {
     await page.goto(`/project/${projectId}`);
     await expect(page).toHaveURL(new RegExp(`/project/${projectId}$`));
     await expect(
-      page.getByRole("button", { name: /add interview/i }),
+      page.getByRole("button", { name: /add conversation/i }),
     ).toBeVisible();
   });
 
@@ -66,7 +66,7 @@ test.describe("Direction C — Interview Inbox", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
 
     await expect(
       page.locator("input[placeholder*='name']").first(),

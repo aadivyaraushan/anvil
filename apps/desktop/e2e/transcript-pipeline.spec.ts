@@ -51,7 +51,7 @@ test.describe("Transcript pipeline — render states", () => {
     await seedInterview({
       projectId,
       attendeeName: "Empty Sara",
-      status: "scheduled",
+      status: "completed",
       transcript: [],
     });
 
@@ -109,9 +109,9 @@ test.describe("Transcript pipeline — render states", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.getByText("Live Lou").click();
-    // For status='live' the canvas shows "Transcript will appear here…"
+    // For status='live' the canvas shows the "Listening…" empty state.
     await expect(
-      page.getByText(/Transcript will appear here/i),
+      page.getByText(/Listening/i),
     ).toBeVisible({ timeout: 10_000 });
   });
 });

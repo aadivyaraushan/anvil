@@ -152,7 +152,7 @@ test.describe("Concurrent mutation: deleted-while-viewing", () => {
 
     await page.goto(`/project/${projectId}`);
     await expect(
-      page.getByRole("button", { name: /add interview/i }),
+      page.getByRole("button", { name: /add conversation/i }),
     ).toBeVisible({ timeout: 10_000 });
 
     // Simulate "user deleted this project from another tab" by removing
@@ -217,7 +217,7 @@ test.describe("Stored-data weirdness", () => {
     // The row uses `truncate` CSS, so we can't getByText(longName) — but
     // the inbox should still be visible (page didn't blow out laterally).
     await expect(
-      page.getByRole("button", { name: /add interview/i }),
+      page.getByRole("button", { name: /add conversation/i }),
     ).toBeVisible({ timeout: 10_000 });
     // Sanity: viewport scrollWidth not drastically larger than width
     // (would indicate horizontal overflow caused by the long name).

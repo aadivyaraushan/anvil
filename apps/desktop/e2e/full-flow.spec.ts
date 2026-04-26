@@ -212,12 +212,12 @@ test.describe("End-to-end user flow", () => {
     });
 
     // ------------------------------------------------------------------
-    // 8. Click the row, canvas should show the placeholder.
+    // 8. Click the row, canvas should show the scheduled empty state.
     // ------------------------------------------------------------------
     await page.getByText(TEST_ATTENDEE).click();
-    await expect(page.getByText(/no transcript available/i)).toBeVisible({
-      timeout: 10_000,
-    });
+    await expect(
+      page.getByRole("button", { name: /start recording/i }).first(),
+    ).toBeVisible({ timeout: 10_000 });
 
     // ------------------------------------------------------------------
     // 9. Simulate Deepgram completing transcription.
