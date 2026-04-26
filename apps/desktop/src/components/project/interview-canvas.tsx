@@ -1,8 +1,9 @@
 'use client'
 
 import { useState } from 'react'
-import { MapPin, Video, Link as LinkIcon } from 'lucide-react'
+import { MapPin, Mic, Video, Link as LinkIcon } from 'lucide-react'
 import type { Interview } from '@/lib/supabase/types'
+import { useTauri } from '@/lib/hooks/use-tauri'
 import { LiveDot } from './live-dot'
 import { SourceGlyph } from './source-glyph'
 import { SuggestedFollowupCard } from './suggested-followup-card'
@@ -40,6 +41,8 @@ function isUrl(value: string | null): boolean {
 
 export function InterviewCanvas({ interview, projectId: _projectId }: InterviewCanvasProps) {
   const [followupIndex, setFollowupIndex] = useState(0)
+  const [recordingError, setRecordingError] = useState<string | null>(null)
+  const { invoke, isTauri } = useTauri()
 
   if (!interview) {
     return (
@@ -66,6 +69,20 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
 
   const handleDismissFollowup = () => {
     setFollowupIndex((i) => (i + 1) % Math.max(suggestedQuestions.length, 1))
+  }
+
+  // The Tauri capsule owns the recording flow (mic + system audio capture,
+  // pause, stop & upload). We just summon it from here so the user can
+  // start capturing right from the conversation page.
+  const handleStartRecording = async () => {
+    setRecordingError(null)
+    const result = await invoke('show_capsule')
+    if (result === null) {
+      setRecordingError(
+        'Recording requires the Anvil desktop app. Open it to capture audio.'
+      )
+      window.setTimeout(() => setRecordingError(null), 4000)
+    }
   }
 
   return (
@@ -131,6 +148,22 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
           </div>
         </div>
         <span className="flex-1" />
+        {isScheduled && (
+          <Button
+            size="sm"
+            onClick={handleStartRecording}
+            disabled={!isTauri}
+            className="text-[12px] h-7 inline-flex items-center gap-1.5"
+            title={
+              isTauri
+                ? 'Capture audio for this conversation'
+                : 'Recording requires the Anvil desktop app'
+            }
+          >
+            <Mic className="w-3 h-3" />
+            Start recording
+          </Button>
+        )}
         {isLive && (
           <>
             <Button variant="outline" size="sm" className="text-[12px] h-7">
@@ -146,6 +179,12 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
           </>
         )}
       </div>
+
+      {recordingError && (
+        <div className="px-8 py-2 border-b border-border bg-muted/30 text-[12px] text-muted-foreground">
+          {recordingError}
+        </div>
+      )}
 
       {/* Transcript body */}
       <div className="flex-1 overflow-auto px-10 py-7">
@@ -176,11 +215,22 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
                   {inPerson ? ' the conversation' : ' the call'} unfolds.
                 </>
               ) : isScheduled ? (
-                <>
-                  {inPerson
-                    ? 'Open this page during your in-person conversation — the live transcript will stream in as you speak.'
-                    : 'Anvil will join the call and stream the live transcript here once it starts.'}
-                </>
+                <div className="space-y-3">
+                  <p>
+                    {inPerson
+                      ? 'When the conversation starts, hit Start recording — the live transcript will stream in as you speak.'
+                      : 'Anvil will join the call and stream the live transcript here once it starts. You can also record locally as a backup.'}
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleStartRecording}
+                    disabled={!isTauri}
+                    className="text-[12px] h-7 inline-flex items-center gap-1.5"
+                  >
+                    <Mic className="w-3 h-3" />
+                    Start recording
+                  </Button>
+                </div>
               ) : (
                 'No transcript available for this conversation.'
               )}
