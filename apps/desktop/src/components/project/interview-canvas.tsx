@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { MapPin, Mic, Square, Video, Link as LinkIcon } from 'lucide-react'
 import type { Interview } from '@/lib/supabase/types'
-import { useTauri } from '@/lib/hooks/use-tauri'
 import { LiveDot } from './live-dot'
 import { SourceGlyph } from './source-glyph'
 import { SuggestedFollowupCard } from './suggested-followup-card'
@@ -15,14 +14,6 @@ type InterviewCanvasProps = {
   projectId?: string
 }
 
-type RecordingState = {
-  is_recording: boolean
-  duration_secs: number
-  project_id: string | null
-  attendee_name: string | null
-  recording_id: string | null
-}
-
 function formatDuration(seconds: number | null): string {
   if (!seconds) return '0:00'
   const m = Math.floor(seconds / 60)
@@ -30,9 +21,10 @@ function formatDuration(seconds: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
-function formatTimestamp(seconds: number): string {
-  const m = Math.floor(seconds / 60)
-  const s = seconds % 60
+function formatTimestamp(ms: number): string {
+  const totalSecs = Math.floor(ms / 1000)
+  const m = Math.floor(totalSecs / 60)
+  const s = totalSecs % 60
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
@@ -69,59 +61,49 @@ function WaveformBars({ phase }: { phase: number }) {
   )
 }
 
+// Preferred mime types in priority order — Deepgram accepts all of them.
+function pickMimeType(): string {
+  const candidates = [
+    'audio/webm;codecs=opus',
+    'audio/webm',
+    'audio/ogg;codecs=opus',
+    'audio/mp4',
+  ]
+  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
+}
+
 export function InterviewCanvas({ interview, projectId: _projectId }: InterviewCanvasProps) {
   const [followupIndex, setFollowupIndex] = useState(0)
   const [recordingError, setRecordingError] = useState<string | null>(null)
-  const [recState, setRecState] = useState<RecordingState>({
-    is_recording: false,
-    duration_secs: 0,
-    project_id: null,
-    attendee_name: null,
-    recording_id: null,
-  })
+  const [isRecording, setIsRecording] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [tick, setTick] = useState(0)
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  // Remember which interview the recording belongs to even if user navigates away
+  // Capture which interview this recording is for in case the user
+  // navigates to another conversation before stopping.
   const recordingInterviewRef = useRef<Interview | null>(null)
-  const { invoke, listen, isTauri, readFileBytes } = useTauri()
 
-  // Sync recording state from Tauri on mount
+  // Recording timer
   useEffect(() => {
-    invoke<RecordingState>('get_recording_state').then((s) => {
-      if (s) setRecState(s)
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    let unlisten: (() => void) | null = null
-    listen<RecordingState>('recording-started', (s) => setRecState(s)).then(
-      (fn) => { unlisten = fn }
-    )
-    return () => unlisten?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  useEffect(() => {
-    let unlisten: (() => void) | null = null
-    listen<RecordingState>('recording-stopped', (s) => setRecState(s)).then(
-      (fn) => { unlisten = fn }
-    )
-    return () => unlisten?.()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Drive the inline duration counter
-  useEffect(() => {
-    if (recState.is_recording) {
+    if (isRecording) {
       timerRef.current = setInterval(() => setTick((t) => t + 1), 1000)
     } else {
       if (timerRef.current) clearInterval(timerRef.current)
       queueMicrotask(() => setTick(0))
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
-  }, [recState.is_recording])
+  }, [isRecording])
+
+  // Clean up on unmount
+  useEffect(() => {
+    return () => {
+      mediaRecorderRef.current?.stop()
+      streamRef.current?.getTracks().forEach((t) => t.stop())
+    }
+  }, [])
 
   if (!interview) {
     return (
@@ -141,8 +123,6 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   const transcript = interview.transcript ?? []
   const suggestedQuestions = interview.suggested_questions ?? []
   const currentQuestion = suggestedQuestions[followupIndex] ?? null
-  const isRecording = recState.is_recording
-  const displayDuration = isRecording ? recState.duration_secs + tick : recState.duration_secs
 
   const handleDismissFollowup = () => {
     setFollowupIndex((i) => (i + 1) % Math.max(suggestedQuestions.length, 1))
@@ -151,74 +131,79 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   const handleStartRecording = async () => {
     setRecordingError(null)
     recordingInterviewRef.current = interview
-    const id = await invoke<string>('start_recording', {
-      projectId: interview.project_id,
-      attendeeName: interview.attendee_name ?? null,
-    })
-    if (!id) {
-      recordingInterviewRef.current = null
-      setRecordingError('Could not start recording. Is the desktop app running?')
-      window.setTimeout(() => setRecordingError(null), 4000)
+
+    let stream: MediaStream
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+    } catch {
+      setRecordingError('Could not access microphone — check your system permissions.')
+      return
     }
+    streamRef.current = stream
+
+    const { getSupabase } = await import('@/lib/supabase/client')
+    const session = await getSupabase().auth.getSession()
+    const token = session.data.session?.access_token
+    if (!token) {
+      setRecordingError('Not signed in. Please sign in again.')
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+
+    const capturedInterview = interview
+    let chunkCount = 0
+
+    const sendChunk = async (data: Blob) => {
+      if (data.size === 0) return
+      const timeOffsetSecs = chunkCount * 10
+      chunkCount++
+
+      const fd = new FormData()
+      fd.append('audio', data, `chunk-${chunkCount}.webm`)
+      fd.append('interview_id', capturedInterview.id)
+      fd.append('time_offset_secs', String(timeOffsetSecs))
+
+      try {
+        await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL}/api/interviews/transcribe-chunk`,
+          {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${token}` },
+            body: fd,
+          }
+        )
+      } catch (e) {
+        console.error('[canvas] chunk upload failed:', e)
+      }
+    }
+
+    const mimeType = pickMimeType()
+    const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
+    mediaRecorderRef.current = recorder
+
+    recorder.ondataavailable = (e) => { sendChunk(e.data) }
+
+    recorder.start(10_000) // send a chunk every 10 seconds
+    setIsRecording(true)
   }
 
   const handleStopRecording = async () => {
-    if (!recState.recording_id) return
-    const capturedInterview = recordingInterviewRef.current ?? interview
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') return
     setUploading(true)
-    setRecordingError(null)
-    try {
-      const filePath = await invoke<string>('stop_recording', {
-        recordingId: recState.recording_id,
-      })
-      if (!filePath) {
-        setRecordingError('Could not finalize recording.')
-        return
-      }
-      const bytes = await readFileBytes(filePath)
-      if (!bytes) {
-        setRecordingError('Could not read recording file.')
-        return
-      }
-      const fileName = filePath.split(/[\\/]/).pop() ?? 'recording.wav'
-      const buf = bytes.slice().buffer as ArrayBuffer
-      const blob = new Blob([buf], { type: 'audio/wav' })
 
-      const { getSupabase } = await import('@/lib/supabase/client')
-      const session = await getSupabase().auth.getSession()
-      const token = session.data.session?.access_token
-      if (!token) {
-        setRecordingError('Not signed in. Sign in again to upload.')
-        return
-      }
+    await new Promise<void>((resolve) => {
+      recorder.onstop = () => resolve()
+      recorder.requestData() // flush the in-progress chunk
+      recorder.stop()
+    })
 
-      const fd = new FormData()
-      fd.append('file', blob, fileName)
-      fd.append('project_id', recState.project_id ?? capturedInterview.project_id ?? '')
-      fd.append('source', 'desktop')
-      if (recState.attendee_name ?? capturedInterview.attendee_name) {
-        fd.append('attendee_name', recState.attendee_name ?? capturedInterview.attendee_name ?? '')
-      }
-      fd.append('interview_id', capturedInterview.id)
-
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL}/api/interviews/upload`,
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: fd,
-        }
-      )
-      if (!res.ok) {
-        setRecordingError(`Upload failed (${res.status}). Saved locally, will retry.`)
-      }
-    } catch (e) {
-      setRecordingError('Upload failed. The recording is saved locally and will retry.')
-      console.error(e)
-    } finally {
-      setUploading(false)
-      recordingInterviewRef.current = null
-    }
+    streamRef.current?.getTracks().forEach((t) => t.stop())
+    streamRef.current = null
+    mediaRecorderRef.current = null
+    recordingInterviewRef.current = null
+    setIsRecording(false)
+    setUploading(false)
   }
 
   return (
@@ -285,12 +270,12 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
         </div>
         <span className="flex-1" />
 
-        {/* Recording controls — inline, no modal */}
+        {/* Recording controls */}
         {isRecording ? (
           <div className="flex items-center gap-3">
             <WaveformBars phase={tick * 0.8} />
             <span className="anvil-mono text-[12px] tabular-nums text-[var(--color-rose)]">
-              {formatRecDuration(displayDuration)}
+              {formatRecDuration(tick)}
             </span>
             <Button
               variant="outline"
@@ -307,13 +292,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
           <Button
             size="sm"
             onClick={handleStartRecording}
-            disabled={!isTauri}
             className="text-[12px] h-7 inline-flex items-center gap-1.5"
-            title={
-              isTauri
-                ? 'Capture audio for this conversation'
-                : 'Recording requires the Anvil desktop app'
-            }
           >
             <Mic className="w-3 h-3" />
             Start recording
@@ -358,7 +337,12 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
 
           {transcript.length === 0 && (
             <div className="text-[13px] text-muted-foreground leading-relaxed">
-              {isLive || isRecording ? (
+              {isRecording ? (
+                <>
+                  Listening… transcript segments will appear here every ~10 seconds
+                  as the conversation unfolds.
+                </>
+              ) : isLive ? (
                 <>
                   Listening… the live transcript will stream in here as
                   {inPerson ? ' the conversation' : ' the call'} unfolds.
@@ -368,12 +352,11 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
                   <p>
                     {inPerson
                       ? 'When the conversation starts, hit Start recording — the live transcript will stream in as you speak.'
-                      : 'Anvil will join the call and stream the live transcript here once it starts. You can also record locally as a backup.'}
+                      : 'Hit Start recording to capture this conversation. The transcript will appear as you speak.'}
                   </p>
                   <Button
                     size="sm"
                     onClick={handleStartRecording}
-                    disabled={!isTauri}
                     className="text-[12px] h-7 inline-flex items-center gap-1.5"
                   >
                     <Mic className="w-3 h-3" />
