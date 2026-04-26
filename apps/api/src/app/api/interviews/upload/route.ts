@@ -24,6 +24,10 @@ export async function POST(req: NextRequest) {
   const project_id = formData.get("project_id") as string | null;
   const attendee_name = formData.get("attendee_name") as string | null;
   const source = (formData.get("source") as string | null) ?? "uploaded";
+  // When the recording was started from an existing conversation page,
+  // the capsule passes the interview_id back so we append to that row
+  // instead of inserting a brand-new conversation.
+  const interview_id = formData.get("interview_id") as string | null;
 
   if (!file || !project_id) {
     return Response.json(
@@ -45,27 +49,66 @@ export async function POST(req: NextRequest) {
 
   const serviceSupabase = createServiceSupabaseClient();
 
-  // Create the interview row immediately with uploading status
-  const { data: interview, error: insertError } = await serviceSupabase
-    .from("interviews")
-    .insert({
-      project_id,
-      source: source as "desktop" | "uploaded",
-      attendee_name: attendee_name ?? null,
-      attendee_company: null,
-      meeting_platform: null,
-      meeting_link: null,
-      scheduled_at: null,
-      status: "scheduled" as const,
-      transcript: [],
-      suggested_questions: [],
-      upload_status: "uploading" as const,
-    })
-    .select()
-    .single();
+  let interview: { id: string };
 
-  if (insertError || !interview) {
-    return Response.json({ error: "Failed to create interview" }, { status: 500 });
+  if (interview_id) {
+    // Append-to-existing path. Verify ownership via the user-scoped client
+    // (RLS enforces project ownership) before letting the service role
+    // mutate the row.
+    const { data: existing } = await supabase
+      .from("interviews")
+      .select("id, project_id")
+      .eq("id", interview_id)
+      .single();
+
+    if (!existing || existing.project_id !== project_id) {
+      return Response.json(
+        { error: "Interview not found or does not belong to project" },
+        { status: 404 }
+      );
+    }
+
+    const { error: updateError } = await serviceSupabase
+      .from("interviews")
+      .update({
+        upload_status: "uploading" as const,
+        // Flip to live so the canvas reflects "transcript landing soon"
+        // while Deepgram works. We restore to "completed" once the
+        // transcript is saved.
+        status: "live" as const,
+      })
+      .eq("id", interview_id);
+
+    if (updateError) {
+      return Response.json({ error: "Failed to update interview" }, { status: 500 });
+    }
+
+    interview = { id: interview_id };
+  } else {
+    // Insert-new path (used by the dashboard's quick-capture button).
+    const { data: created, error: insertError } = await serviceSupabase
+      .from("interviews")
+      .insert({
+        project_id,
+        source: source as "desktop" | "uploaded",
+        attendee_name: attendee_name ?? null,
+        attendee_company: null,
+        meeting_platform: null,
+        meeting_link: null,
+        scheduled_at: null,
+        status: "scheduled" as const,
+        transcript: [],
+        suggested_questions: [],
+        upload_status: "uploading" as const,
+      })
+      .select()
+      .single();
+
+    if (insertError || !created) {
+      return Response.json({ error: "Failed to create interview" }, { status: 500 });
+    }
+
+    interview = created;
   }
 
   // Upload audio file to Supabase storage
