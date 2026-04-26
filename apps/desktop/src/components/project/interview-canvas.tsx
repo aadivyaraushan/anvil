@@ -141,11 +141,19 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
     }
     streamRef.current = stream
 
+    // Verify we're signed in before starting; don't capture token in closure
+    // so it's refreshed per-chunk (Supabase handles token rotation internally).
     const { getSupabase } = await import('@/lib/supabase/client')
-    const session = await getSupabase().auth.getSession()
-    const token = session.data.session?.access_token
-    if (!token) {
+    const { data: { session: initialSession } } = await getSupabase().auth.getSession()
+    if (!initialSession) {
       setRecordingError('Not signed in. Please sign in again.')
+      stream.getTracks().forEach((t) => t.stop())
+      return
+    }
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL
+    if (!apiBase) {
+      setRecordingError('API URL not configured — check NEXT_PUBLIC_API_URL in .env.local.')
       stream.getTracks().forEach((t) => t.stop())
       return
     }
@@ -158,20 +166,22 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
       const timeOffsetSecs = chunkCount * 10
       chunkCount++
 
+      // Re-fetch session each chunk so the token is always fresh.
+      const { data: { session } } = await getSupabase().auth.getSession()
+      const token = session?.access_token
+      if (!token) return
+
       const fd = new FormData()
       fd.append('audio', data, `chunk-${chunkCount}.webm`)
       fd.append('interview_id', capturedInterview.id)
       fd.append('time_offset_secs', String(timeOffsetSecs))
 
       try {
-        await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/api/interviews/transcribe-chunk`,
-          {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${token}` },
-            body: fd,
-          }
-        )
+        await fetch(`${apiBase}/api/interviews/transcribe-chunk`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: fd,
+        })
       } catch (e) {
         console.error('[canvas] chunk upload failed:', e)
       }
