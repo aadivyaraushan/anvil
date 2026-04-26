@@ -82,12 +82,12 @@ export function FindingsRail({ projectId }: FindingsRailProps) {
     )
   }
 
-  // Empty state: no analyst doc and fewer than 2 interviews
+  // Empty state: no analyst doc and fewer than 2 conversations
   if (!isLoading && !analystDoc && interviewCount < 2) {
     return (
       <aside className="px-5 py-[18px] overflow-auto h-full flex items-center justify-center">
         <p className="text-[12px] text-muted-foreground text-center leading-relaxed">
-          Complete 2 interviews to unlock findings.
+          Complete 2 conversations to unlock findings.
         </p>
       </aside>
     )
@@ -207,7 +207,7 @@ export function FindingsRail({ projectId }: FindingsRailProps) {
 
             {suggestedPersonas.length > 0 && confirmedPersonas.length === 0 && (
               <p className="text-[11px] text-muted-foreground mt-1.5">
-                Refined after interview 2.
+                Refined after conversation 2.
               </p>
             )}
 
@@ -257,7 +257,7 @@ export function FindingsRail({ projectId }: FindingsRailProps) {
             isOffline
               ? 'Needs connection to generate findings.'
               : interviewCount < 2
-              ? 'Complete 2 interviews to run analysis.'
+              ? 'Complete 2 conversations to run analysis.'
               : 'Run analyst'
           }
         >

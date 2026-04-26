@@ -48,7 +48,7 @@ test.describe("Empty states", () => {
       name: "Empty inbox",
     });
     await page.goto(`/project/${projectId}`);
-    await expect(page.getByText(/No interviews yet/i)).toBeVisible({
+    await expect(page.getByText(/No conversations yet/i)).toBeVisible({
       timeout: 10_000,
     });
   });

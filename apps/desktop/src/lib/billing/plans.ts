@@ -32,7 +32,7 @@ export const PLANS: Record<Plan, PlanConfig> = {
     features: [
       "1 project",
       "5 contacts per project",
-      "2 interviews per project",
+      "2 conversations per project",
       "1 analyst run",
     ],
   },
@@ -50,8 +50,8 @@ export const PLANS: Record<Plan, PlanConfig> = {
     features: [
       "10 projects",
       "100 contacts per project",
-      "20 interviews per project",
-      "Live AI interview copilot",
+      "20 conversations per project",
+      "Live AI conversation copilot",
       "Unlimited analyst runs",
     ],
   },
@@ -69,8 +69,8 @@ export const PLANS: Record<Plan, PlanConfig> = {
     features: [
       "Unlimited projects",
       "Unlimited contacts",
-      "Unlimited interviews",
-      "Live AI interview copilot",
+      "Unlimited conversations",
+      "Live AI conversation copilot",
       "Unlimited analyst runs",
       "Priority support",
     ],

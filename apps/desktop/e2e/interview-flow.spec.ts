@@ -32,7 +32,9 @@ test.describe("Add interview — submit", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    // Switch to the Online conversation mode — the drawer defaults to In person.
+    await page.getByRole("tab", { name: /online/i }).click();
 
     // Leave the URL field empty entirely. Just supply an attendee.
     await page
@@ -58,7 +60,9 @@ test.describe("Add interview — submit", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    // Switch to the Online conversation mode — the drawer defaults to In person.
+    await page.getByRole("tab", { name: /online/i }).click();
 
     await page
       .locator("input[placeholder*='meet.google.com']")
@@ -80,7 +84,9 @@ test.describe("Add interview — submit", () => {
     const tricky = `Renée O'Hara "Bunny" 🦊 &amp; مرحبا\tEnd`;
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    // Switch to the Online conversation mode — the drawer defaults to In person.
+    await page.getByRole("tab", { name: /online/i }).click();
     await page.locator("input[placeholder*='Attendee name']").fill(tricky);
     await page.getByRole("button", { name: /Anvil will join/i }).click();
 
@@ -102,7 +108,9 @@ test.describe("Add interview — submit", () => {
     const payload = `<img src=x onerror="window.__pwned=true">XSS Probe`;
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    // Switch to the Online conversation mode — the drawer defaults to In person.
+    await page.getByRole("tab", { name: /online/i }).click();
     await page.locator("input[placeholder*='Attendee name']").fill(payload);
     await page.getByRole("button", { name: /Anvil will join/i }).click();
 
@@ -130,7 +138,9 @@ test.describe("Add interview — submit", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    // Switch to the Online conversation mode — the drawer defaults to In person.
+    await page.getByRole("tab", { name: /online/i }).click();
     await page
       .locator("input[placeholder*='Attendee name']")
       .fill("Dedupe Test");
@@ -158,7 +168,9 @@ test.describe("Add interview — submit", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    // Switch to the Online conversation mode — the drawer defaults to In person.
+    await page.getByRole("tab", { name: /online/i }).click();
     await page
       .locator("input[placeholder*='Attendee name']")
       .fill("Will Fail");

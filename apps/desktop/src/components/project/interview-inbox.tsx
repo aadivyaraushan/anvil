@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import Link from 'next/link'
-import { Plus, Link as LinkIcon, ChevronLeft } from 'lucide-react'
+import { Plus, Link as LinkIcon, ChevronLeft, MapPin, Video } from 'lucide-react'
 import { useInterviews } from '@/lib/hooks/use-interviews'
 import { useProject } from '@/lib/hooks/use-projects'
 import { useCreateInterview } from '@/lib/hooks/use-interviews'
@@ -12,6 +12,8 @@ import { SourceGlyph } from './source-glyph'
 import { ErrorCard } from '@/components/error-card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+
+type ConversationMode = 'in_person' | 'online'
 
 type InterviewInboxProps = {
   projectId: string
@@ -109,7 +111,9 @@ type AddInterviewDrawerProps = {
 }
 
 function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
+  const [mode, setMode] = useState<ConversationMode>('in_person')
   const [meetLink, setMeetLink] = useState('')
+  const [location, setLocation] = useState('')
   const [attendeeName, setAttendeeName] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
   const createInterview = useCreateInterview()
@@ -121,13 +125,17 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
   const handleSubmit = () => {
     if (submittingRef.current) return
     submittingRef.current = true
+    const isOnline = mode === 'online'
     createInterview.mutate(
       {
         projectId,
         personaId: null,
-        source: 'meet_link',
-        meetingPlatform: 'google_meet',
-        meetingLink: meetLink || null,
+        source: isOnline ? 'meet_link' : 'inperson',
+        meetingPlatform: isOnline ? 'google_meet' : null,
+        // For in-person we stash the location string in `meeting_link` so
+        // the canvas can surface it without a schema change. The column
+        // is just `text`, not URL-validated.
+        meetingLink: isOnline ? (meetLink || null) : (location || null),
         attendeeName: attendeeName || null,
         attendeeCompany: null,
         scheduledAt: scheduledTime || null,
@@ -141,17 +149,71 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
 
   return (
     <div className="px-3.5 py-3 border-b border-border bg-muted/30">
-      <div className="anvil-caps mb-2">Add interview</div>
-      <div className="relative mb-2">
-        <LinkIcon className="absolute left-2.5 top-2.5 w-3 h-3 text-muted-foreground" />
-        <input
-          type="url"
-          placeholder="https://meet.google.com/..."
-          value={meetLink}
-          onChange={(e) => setMeetLink(e.target.value)}
-          className="w-full h-8 pl-7 pr-2.5 text-[12px] bg-background border border-border rounded-md outline-none focus:ring-1 focus:ring-ring font-mono"
-        />
+      <div className="anvil-caps mb-2">Add conversation</div>
+
+      {/* Modality toggle */}
+      <div
+        role="tablist"
+        aria-label="Conversation type"
+        className="grid grid-cols-2 gap-0.5 p-0.5 mb-2 bg-muted rounded-md"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'in_person'}
+          onClick={() => setMode('in_person')}
+          className={cn(
+            'h-6 inline-flex items-center justify-center gap-1 rounded text-[11px] tracking-[-0.005em] transition-colors',
+            mode === 'in_person'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <MapPin className="w-3 h-3" />
+          In person
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'online'}
+          onClick={() => setMode('online')}
+          className={cn(
+            'h-6 inline-flex items-center justify-center gap-1 rounded text-[11px] tracking-[-0.005em] transition-colors',
+            mode === 'online'
+              ? 'bg-background text-foreground shadow-sm'
+              : 'text-muted-foreground hover:text-foreground'
+          )}
+        >
+          <Video className="w-3 h-3" />
+          Online
+        </button>
       </div>
+
+      {/* Mode-specific input: meet link OR location */}
+      {mode === 'online' ? (
+        <div className="relative mb-2">
+          <LinkIcon className="absolute left-2.5 top-2.5 w-3 h-3 text-muted-foreground" />
+          <input
+            type="url"
+            placeholder="https://meet.google.com/..."
+            value={meetLink}
+            onChange={(e) => setMeetLink(e.target.value)}
+            className="w-full h-8 pl-7 pr-2.5 text-[12px] bg-background border border-border rounded-md outline-none focus:ring-1 focus:ring-ring font-mono"
+          />
+        </div>
+      ) : (
+        <div className="relative mb-2">
+          <MapPin className="absolute left-2.5 top-2.5 w-3 h-3 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Location (optional) — e.g. Sightglass on Mission"
+            value={location}
+            onChange={(e) => setLocation(e.target.value)}
+            className="w-full h-8 pl-7 pr-2.5 text-[12px] bg-background border border-border rounded-md outline-none focus:ring-1 focus:ring-ring"
+          />
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-1.5 mb-2">
         <input
           type="text"
@@ -175,7 +237,7 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
           onClick={handleSubmit}
           disabled={createInterview.isPending}
         >
-          Anvil will join
+          {mode === 'online' ? 'Anvil will join the call' : 'Schedule conversation'}
         </Button>
         <Button
           variant="ghost"
@@ -186,7 +248,12 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
           Cancel
         </Button>
       </div>
-      <div className="flex gap-2.5 text-[11px] text-muted-foreground">
+      <div className="text-[11px] text-muted-foreground leading-snug">
+        {mode === 'online'
+          ? 'A live transcript will stream into the conversation page once the call starts.'
+          : 'Open the conversation page during your meeting — the live transcript will stream in as you speak.'}
+      </div>
+      <div className="flex gap-2.5 text-[11px] text-muted-foreground mt-2 pt-2 border-t border-border/60">
         <button className="hover:text-foreground transition-colors cursor-pointer">
           ↑ Upload recording
         </button>
@@ -318,7 +385,7 @@ export function InterviewInbox({
             className="w-full flex items-center gap-2 px-2.5 py-2 bg-transparent text-muted-foreground border border-dashed border-border rounded-[7px] text-[12.5px] tracking-[-0.005em] cursor-pointer hover:text-foreground transition-colors"
           >
             <Plus className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-            Add interview
+            Add conversation
             <span className="flex-1" />
             <span className="anvil-mono text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded-[3px]">
               ⌘N
@@ -344,8 +411,9 @@ export function InterviewInbox({
         )}
 
         {!isLoading && !isError && interviews.length === 0 && (
-          <div className="px-[18px] py-4 text-[12px] text-muted-foreground">
-            No interviews yet.
+          <div className="px-[18px] py-4 text-[12px] text-muted-foreground leading-snug">
+            No conversations yet. Add an in-person or online conversation to
+            start capturing a live transcript.
           </div>
         )}
 

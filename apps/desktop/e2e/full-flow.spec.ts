@@ -189,15 +189,16 @@ test.describe("End-to-end user flow", () => {
     // 5. Project workspace renders inbox + findings rail.
     // ------------------------------------------------------------------
     await expect(
-      page.getByRole("button", { name: /add interview/i }),
+      page.getByRole("button", { name: /add conversation/i }),
     ).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("Findings", { exact: true })).toBeVisible();
-    await expect(page.getByText(/no interviews yet/i)).toBeVisible();
+    await expect(page.getByText(/no conversations yet/i)).toBeVisible();
 
     // ------------------------------------------------------------------
-    // 6. Add an interview via the inline drawer.
+    // 6. Add a conversation via the inline drawer (online mode).
     // ------------------------------------------------------------------
-    await page.getByRole("button", { name: /add interview/i }).click();
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    await page.getByRole("tab", { name: /online/i }).click();
     await page
       .locator("input[placeholder*='Attendee name']")
       .fill(TEST_ATTENDEE);
