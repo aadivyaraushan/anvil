@@ -65,7 +65,16 @@ export async function POST(req: NextRequest) {
     .single();
 
   if (insertError || !interview) {
-    return Response.json({ error: "Failed to create interview" }, { status: 500 });
+    console.error("[upload] interviews insert failed:", insertError);
+    return Response.json(
+      {
+        error: "Failed to create interview",
+        stage: "interviews_insert",
+        detail: insertError?.message ?? null,
+        code: insertError?.code ?? null,
+      },
+      { status: 500 }
+    );
   }
 
   // Upload audio file to Supabase storage
@@ -80,12 +89,20 @@ export async function POST(req: NextRequest) {
     });
 
   if (uploadError) {
+    console.error("[upload] storage upload failed:", uploadError);
     // Mark as failed if upload fails
     await serviceSupabase
       .from("interviews")
       .update({ upload_status: "failed" })
       .eq("id", interview.id);
-    return Response.json({ error: "Storage upload failed" }, { status: 500 });
+    return Response.json(
+      {
+        error: "Storage upload failed",
+        stage: "storage_upload",
+        detail: uploadError.message ?? null,
+      },
+      { status: 500 }
+    );
   }
 
   // Update recording path

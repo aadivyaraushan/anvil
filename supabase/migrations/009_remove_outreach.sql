@@ -29,7 +29,6 @@ alter table user_settings
   drop column if exists apollo_api_key;
 
 -- Add persona status for soft-proposed archetypes
-alter type persona_status_type rename to _persona_status_type_old 2>/dev/null; -- no-op if doesn't exist
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'persona_status_type') then

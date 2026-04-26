@@ -4,6 +4,11 @@ import {
   createServiceSupabaseClient,
   extractBearerToken,
 } from "@/lib/supabase/server";
+import {
+  emailDomain,
+  filterOneExternalAttendeeEvents,
+  type CalendarEventInput,
+} from "@/lib/calendar/filter";
 import { google } from "googleapis";
 
 function getOAuth2Client(accessToken: string, refreshToken: string) {
@@ -17,11 +22,6 @@ function getOAuth2Client(accessToken: string, refreshToken: string) {
     refresh_token: refreshToken,
   });
   return client;
-}
-
-/** Returns the domain portion of an email address. */
-function emailDomain(email: string): string {
-  return email.split("@")[1]?.toLowerCase() ?? "";
 }
 
 export async function GET(req: NextRequest) {
@@ -78,13 +78,7 @@ export async function GET(req: NextRequest) {
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const thirtyDaysAhead = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
 
-  let rawEvents: Array<{
-    id?: string | null;
-    summary?: string | null;
-    start?: { dateTime?: string | null; date?: string | null };
-    attendees?: Array<{ email?: string | null; displayName?: string | null; self?: boolean | null }>;
-    status?: string | null;
-  }> = [];
+  let rawEvents: CalendarEventInput[] = [];
 
   try {
     const { data } = await calendar.events.list({
@@ -101,30 +95,7 @@ export async function GET(req: NextRequest) {
     return Response.json({ error: "Failed to fetch calendar events" }, { status: 500 });
   }
 
-  // Filter: only events with exactly 1 external attendee (domain != user domain)
-  const filtered = rawEvents
-    .map((event) => {
-      const attendees = event.attendees ?? [];
-      const external = attendees.filter(
-        (a) => !a.self && a.email && emailDomain(a.email) !== userDomain
-      );
-      if (external.length !== 1) return null;
-
-      const ext = external[0];
-      const startRaw = event.start?.dateTime ?? event.start?.date ?? null;
-      const startDate = startRaw ? new Date(startRaw) : null;
-
-      return {
-        id: event.id ?? "",
-        summary: event.summary ?? "(No title)",
-        attendee_name: ext.displayName ?? ext.email ?? "",
-        attendee_company: ext.email ? emailDomain(ext.email) : "",
-        start: startRaw,
-        source: "cal" as const,
-        status: startDate && startDate < now ? ("done" as const) : ("upcoming" as const),
-      };
-    })
-    .filter(Boolean);
+  const filtered = filterOneExternalAttendeeEvents(rawEvents, userDomain, now);
 
   return Response.json({ events: filtered });
 }

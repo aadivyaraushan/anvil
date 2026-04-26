@@ -6,6 +6,10 @@ import {
   buildProposeArchetypesPrompt,
   type ExtractionInput,
 } from "./prompts";
+import {
+  shouldProposeArchetypes,
+  type ProposalPersona,
+} from "./proposal";
 import type {
   AnalystState,
   CompletedInterview,
@@ -279,20 +283,18 @@ export async function saveAnalyst(
   }
 
   // ── Soft archetype proposal ──────────────────────────────────────────────
-  // After ≥2 completed interviews, if no confirmed personas exist, propose
-  // 2–3 archetypes automatically (status: 'suggested'). These appear in the
-  // findings rail as "Suggested · Name" and are editable on the archetypes page.
-  if (state.interviews.length >= 2) {
+  {
     const { data: existingPersonas } = await supabase
       .from("personas")
       .select("id, status")
       .eq("project_id", state.projectId);
 
-    const hasConfirmed = (existingPersonas ?? []).some(
-      (p: { status: string }) => p.status === "confirmed"
-    );
+    const decision = shouldProposeArchetypes({
+      completedInterviewCount: state.interviews.length,
+      existingPersonas: (existingPersonas ?? []) as ProposalPersona[],
+    });
 
-    if (!hasConfirmed && (existingPersonas ?? []).length === 0) {
+    if (decision) {
       try {
         const interviewsSummary = state.extractedData
           .map(
