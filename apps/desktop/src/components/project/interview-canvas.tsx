@@ -1,10 +1,11 @@
 'use client'
 
 import { useState } from 'react'
+import { MapPin, Mic, Video, Link as LinkIcon } from 'lucide-react'
 import type { Interview } from '@/lib/supabase/types'
+import { useTauri } from '@/lib/hooks/use-tauri'
 import { LiveDot } from './live-dot'
 import { SourceGlyph } from './source-glyph'
-import { Pill } from './pill'
 import { SuggestedFollowupCard } from './suggested-followup-card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -27,20 +28,44 @@ function formatTimestamp(seconds: number): string {
   return `${m}:${s.toString().padStart(2, '0')}`
 }
 
+// `meeting_link` holds a URL for online conversations and a plain location
+// string for in-person ones (the column is just `text`).
+function isInPerson(interview: Interview): boolean {
+  return interview.source === 'inperson'
+}
+
+function isUrl(value: string | null): boolean {
+  if (!value) return false
+  return /^https?:\/\//i.test(value.trim())
+}
+
+// Handoff to the capsule (separate Tauri WebView). The capsule reads
+// localStorage on mount and re-reads when the PRESELECT_EVENT fires, so
+// this works whether the capsule is opening fresh or already on screen.
+// Constants must match apps/desktop/src/app/capsule/page.tsx.
+const PRESELECT_STORAGE_KEY = 'anvil:capsule-preselect'
+const PRESELECT_EVENT = 'capsule:preselect-changed'
+
 export function InterviewCanvas({ interview, projectId: _projectId }: InterviewCanvasProps) {
   const [followupIndex, setFollowupIndex] = useState(0)
+  const [recordingError, setRecordingError] = useState<string | null>(null)
+  const { invoke, emit, isTauri } = useTauri()
 
   if (!interview) {
     return (
       <main className="flex flex-col h-full items-center justify-center">
         <p className="text-[13px] text-muted-foreground">
-          Select an interview to begin.
+          Select a conversation to see its live transcript.
         </p>
       </main>
     )
   }
 
   const isLive = interview.status === 'live'
+  const isScheduled = interview.status === 'scheduled'
+  const inPerson = isInPerson(interview)
+  const meetingLinkValue = interview.meeting_link
+  const meetingIsUrl = !inPerson && isUrl(meetingLinkValue)
   const transcript = interview.transcript ?? []
   const suggestedQuestions = interview.suggested_questions ?? []
   const currentQuestion = suggestedQuestions[followupIndex] ?? null
@@ -53,17 +78,69 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
     setFollowupIndex((i) => (i + 1) % Math.max(suggestedQuestions.length, 1))
   }
 
+  // The Tauri capsule owns the recording flow (mic + system audio capture,
+  // pause, stop & upload). We summon it from here, but first we hand off
+  // the current conversation's id so the upload appends to this row
+  // instead of inserting a brand-new one.
+  const handleStartRecording = async () => {
+    setRecordingError(null)
+    try {
+      window.localStorage.setItem(
+        PRESELECT_STORAGE_KEY,
+        JSON.stringify({
+          interview_id: interview.id,
+          project_id: interview.project_id,
+          attendee_name: interview.attendee_name,
+          ts: Date.now(),
+        })
+      )
+    } catch {
+      // localStorage can throw in private mode — non-fatal; the capsule
+      // will fall back to insert-new behavior.
+    }
+    // Notify an already-open capsule that the handoff changed. Brand-new
+    // capsule mounts read localStorage directly, so we don't depend on
+    // the event being delivered.
+    await emit(PRESELECT_EVENT)
+    const result = await invoke('show_capsule')
+    if (result === null) {
+      setRecordingError(
+        'Recording requires the Anvil desktop app. Open it to capture audio.'
+      )
+      window.setTimeout(() => setRecordingError(null), 4000)
+    }
+  }
+
   return (
     <main className="flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-8 py-[18px] border-b border-border flex items-center gap-3 shrink-0">
         {isLive && <LiveDot size="sm" color="rose" />}
-        <div>
-          <div className="text-[15px] font-medium tracking-[-0.01em]">
+        <div className="min-w-0">
+          <div className="text-[15px] font-medium tracking-[-0.01em] truncate">
             {interview.attendee_name ?? 'Unknown'}
             {interview.attendee_company ? ` · ${interview.attendee_company}` : ''}
           </div>
-          <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5">
+          <div className="text-[11px] text-muted-foreground mt-0.5 flex items-center gap-1.5 flex-wrap">
+            {/* Modality chip — explicit "In person" vs "Online" */}
+            <span
+              className={cn(
+                'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-[4px] border',
+                inPerson
+                  ? 'border-[var(--color-amber)]/30 text-[var(--color-amber)]'
+                  : 'border-[var(--color-azure)]/30 text-[var(--color-azure)]'
+              )}
+            >
+              {inPerson ? (
+                <MapPin className="w-3 h-3" />
+              ) : (
+                <Video className="w-3 h-3" />
+              )}
+              <span className="anvil-caps">
+                {inPerson ? 'In person' : 'Online'}
+              </span>
+            </span>
+            <span className="text-border">·</span>
             <SourceGlyph source={interview.source} />
             {interview.duration_seconds !== null && (
               <>
@@ -73,9 +150,46 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
                 </span>
               </>
             )}
+            {meetingLinkValue && (
+              <>
+                <span className="text-border">·</span>
+                {meetingIsUrl ? (
+                  <a
+                    href={meetingLinkValue}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors max-w-[220px]"
+                  >
+                    <LinkIcon className="w-3 h-3 shrink-0" />
+                    <span className="truncate font-mono">{meetingLinkValue}</span>
+                  </a>
+                ) : (
+                  <span className="inline-flex items-center gap-1 max-w-[220px]">
+                    <MapPin className="w-3 h-3 shrink-0" />
+                    <span className="truncate">{meetingLinkValue}</span>
+                  </span>
+                )}
+              </>
+            )}
           </div>
         </div>
         <span className="flex-1" />
+        {isScheduled && (
+          <Button
+            size="sm"
+            onClick={handleStartRecording}
+            disabled={!isTauri}
+            className="text-[12px] h-7 inline-flex items-center gap-1.5"
+            title={
+              isTauri
+                ? 'Capture audio for this conversation'
+                : 'Recording requires the Anvil desktop app'
+            }
+          >
+            <Mic className="w-3 h-3" />
+            Start recording
+          </Button>
+        )}
         {isLive && (
           <>
             <Button variant="outline" size="sm" className="text-[12px] h-7">
@@ -86,19 +200,67 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
               size="sm"
               className="text-[12px] h-7 text-muted-foreground"
             >
-              End interview
+              End conversation
             </Button>
           </>
         )}
       </div>
 
+      {recordingError && (
+        <div className="px-8 py-2 border-b border-border bg-muted/30 text-[12px] text-muted-foreground">
+          {recordingError}
+        </div>
+      )}
+
       {/* Transcript body */}
       <div className="flex-1 overflow-auto px-10 py-7">
         <div className="max-w-[600px]">
+          {/* Live transcript section header — makes the central feature explicit */}
+          <div className="flex items-center gap-2 mb-4 pb-2 border-b border-border/60">
+            <span className="anvil-caps text-muted-foreground">
+              Live transcript
+            </span>
+            {isLive && (
+              <span className="inline-flex items-center gap-1 text-[11px] text-[var(--color-rose)]">
+                <LiveDot size="sm" color="rose" />
+                Recording
+              </span>
+            )}
+            {transcript.length > 0 && (
+              <span className="text-[11px] text-muted-foreground">
+                · {transcript.length} {transcript.length === 1 ? 'turn' : 'turns'}
+              </span>
+            )}
+          </div>
+
           {transcript.length === 0 && (
-            <p className="text-[13px] text-muted-foreground">
-              {isLive ? 'Transcript will appear here…' : 'No transcript available.'}
-            </p>
+            <div className="text-[13px] text-muted-foreground leading-relaxed">
+              {isLive ? (
+                <>
+                  Listening… the live transcript will stream in here as
+                  {inPerson ? ' the conversation' : ' the call'} unfolds.
+                </>
+              ) : isScheduled ? (
+                <div className="space-y-3">
+                  <p>
+                    {inPerson
+                      ? 'When the conversation starts, hit Start recording — the live transcript will stream in as you speak.'
+                      : 'Anvil will join the call and stream the live transcript here once it starts. You can also record locally as a backup.'}
+                  </p>
+                  <Button
+                    size="sm"
+                    onClick={handleStartRecording}
+                    disabled={!isTauri}
+                    className="text-[12px] h-7 inline-flex items-center gap-1.5"
+                  >
+                    <Mic className="w-3 h-3" />
+                    Start recording
+                  </Button>
+                </div>
+              ) : (
+                'No transcript available for this conversation.'
+              )}
+            </div>
           )}
 
           {transcript.map((message, i) => {

@@ -14,14 +14,11 @@ test.afterEach(async () => {
 });
 
 test.describe("dashboard", () => {
-  test("shows dashboard heading and New project button", async ({ page }) => {
+  test("shows dashboard chrome with New project button", async ({ page }) => {
     await page.goto("/dashboard");
     await expect(page).toHaveURL("/dashboard");
     await expect(
-      page.getByRole("heading", { name: "Projects" })
-    ).toBeVisible();
-    await expect(
-      page.getByRole("link", { name: "New project" })
+      page.getByRole("link", { name: "New project" }),
     ).toBeVisible();
   });
 
@@ -32,57 +29,29 @@ test.describe("dashboard", () => {
     await expect(page).toHaveURL("/dashboard/new");
   });
 
-  test("new-project form renders all required fields", async ({ page }) => {
+  test("new-project form renders required fields", async ({ page }) => {
     await page.goto("/dashboard/new");
-    await expect(page.locator('input[name="name"]')).toBeVisible();
+    await expect(page.locator("#name")).toBeVisible();
+    await expect(page.locator("#idea_description")).toBeVisible();
     await expect(
-      page.locator('textarea[name="idea_description"]')
-    ).toBeVisible();
-    await expect(
-      page.locator('textarea[name="target_profile"]')
-    ).toBeVisible();
-    await expect(
-      page.getByRole("button", { name: "Create project" })
+      page.getByRole("button", { name: /create project/i }),
     ).toBeVisible();
   });
 
-  test("submitting the form redirects to archetype setup", async ({ page }) => {
-    await page.route("**/api/projects/*/generate-archetypes", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          archetypes: [
-            {
-              name: "Finance leader",
-              description: "Owns budget and tooling decisions.",
-              job_titles: ["Head of Finance"],
-              pain_points: ["Reporting is manual"],
-            },
-          ],
-        }),
-      });
-    });
-
+  test("submitting the form creates a project and routes to its workspace", async ({
+    page,
+  }) => {
     await page.goto("/dashboard/new");
+    await page.locator("#name").fill("E2E Playwright Test Project");
+    await page
+      .locator("#idea_description")
+      .fill("A Playwright E2E test project for validating the creation flow.");
 
-    await page.locator('input[name="name"]').fill("E2E Playwright Test Project");
-    await page.locator('textarea[name="idea_description"]').fill(
-      "A Playwright E2E test project for validating the creation flow."
-    );
-    await page.locator('textarea[name="target_profile"]').fill(
-      "QA engineers at mid-stage startups"
-    );
+    await page.getByRole("button", { name: /create project/i }).click();
 
-    await page.getByRole("button", { name: "Create project" }).click();
-
-    await page.waitForURL(/\/project\/[0-9a-f-]{36}\/archetypes/, {
-      timeout: 20_000,
-    });
-    expect(page.url()).toMatch(/\/project\/[0-9a-f-]{36}\/archetypes/);
-    await expect(
-      page.getByRole("heading", { name: "Who are your customers?" })
-    ).toBeVisible();
-    await expect(page.locator('input[value="Finance leader"]')).toBeVisible();
+    // The current flow goes straight to /project/{id} (the archetypes-first
+    // gating from the previous design was removed in 5d9743b).
+    await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+    expect(page.url()).toMatch(/\/project\/[0-9a-f-]{36}$/);
   });
 });

@@ -192,7 +192,7 @@ describe('FindingsRail', () => {
     render(<FindingsRail projectId="proj-1" />)
 
     expect(
-      screen.getByText('Complete 2 interviews to unlock findings.')
+      screen.getByText('Complete 2 conversations to unlock findings.')
     ).toBeDefined()
   })
 

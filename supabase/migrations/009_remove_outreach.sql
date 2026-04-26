@@ -28,7 +28,12 @@ alter table user_settings
 alter table user_settings
   drop column if exists apollo_api_key;
 
--- Add persona status for soft-proposed archetypes
+-- Add persona status for soft-proposed archetypes.
+-- Earlier draft used `alter type ... rename ... 2>/dev/null` — that's
+-- bash redirection inside SQL, which Postgres parses as `2 > /dev/null`
+-- and rejects. Replaced with a pure DO-block that creates the type only
+-- if missing. If a stale persona_status_type exists with the wrong
+-- values, that's a manual cleanup, not something we silently rename.
 do $$
 begin
   if not exists (select 1 from pg_type where typname = 'persona_status_type') then

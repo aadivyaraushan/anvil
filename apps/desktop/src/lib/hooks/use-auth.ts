@@ -6,6 +6,10 @@ import type { Session, User } from "@supabase/supabase-js";
 // ---------------------------------------------------------------------------
 // useSession
 // ---------------------------------------------------------------------------
+//
+// Auth-state mirror lives in QueryProvider (always alive, above every
+// route) — see src/providers/query-provider.tsx. We just read the cache
+// here.
 
 export function useSession() {
   return useQuery<Session | null>({

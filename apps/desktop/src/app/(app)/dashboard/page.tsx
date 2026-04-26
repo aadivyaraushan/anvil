@@ -128,7 +128,7 @@ export default function DashboardPage() {
       const supabase = getSupabase();
       const { data, error } = await supabase
         .from("interviews")
-        .select("id, project_id, status, scheduled_at, attendee_name, created_at")
+        .select("id, project_id, status, scheduled_at, attendee_name, created_at, source, meeting_link")
         .order("scheduled_at", { ascending: true });
       if (error) throw error;
       return data;
@@ -171,6 +171,9 @@ export default function DashboardPage() {
   async function handleStartRecording() {
     // The capsule owns the recording flow — it picks the project, invokes
     // `start_recording`, and handles the upload. Dashboard just summons it.
+    // Clear any conversation-page handoff so a stale preselect from
+    // earlier doesn't make the capsule append to the wrong row.
+    try { window.localStorage.removeItem("anvil:capsule-preselect"); } catch {}
     const result = await invokeTauri("show_capsule");
     if (result === null) {
       setRecordingToast("Tauri not available — run the desktop app to record.");
@@ -192,17 +195,24 @@ export default function DashboardPage() {
   let heroMain: string;
   let heroSub: string;
   if (liveInterview) {
-    const name = liveInterview.attendee_name ?? "Interview";
+    const name = liveInterview.attendee_name ?? "Conversation";
     const time = liveInterview.scheduled_at
       ? new Date(liveInterview.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
       : "now";
-    heroMain = `${name} at ${time} on Meet.`;
+    // Don't hardcode "on Meet" — conversations can be in-person too.
+    const where =
+      liveInterview.source === "inperson"
+        ? "in person"
+        : liveInterview.meeting_link
+        ? "on a call"
+        : "";
+    heroMain = where ? `${name} at ${time} ${where}.` : `${name} at ${time}.`;
     heroSub = "Live now — transcript updating.";
   } else if (upcomingInterviews.length > 0) {
-    heroMain = `You have ${upcomingInterviews.length} upcoming interview${upcomingInterviews.length !== 1 ? "s" : ""}.`;
+    heroMain = `You have ${upcomingInterviews.length} upcoming conversation${upcomingInterviews.length !== 1 ? "s" : ""}.`;
     heroSub = "Use the capture bar below to start recording.";
   } else {
-    heroMain = "No interviews scheduled yet.";
+    heroMain = "No conversations scheduled yet.";
     heroSub = "Add a project or capture a conversation to get started.";
   }
 
@@ -226,7 +236,7 @@ export default function DashboardPage() {
             className="ml-1 inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:bg-muted transition-colors"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="mr-0.5"><path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-            Add interview
+            Add conversation
           </Link>
         ) : (
           <button
@@ -234,7 +244,7 @@ export default function DashboardPage() {
             className="ml-1 inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm text-muted-foreground hover:bg-muted transition-colors"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" className="mr-0.5"><path d="M8 2v12M2 8h12" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/></svg>
-            Add interview
+            Add conversation
           </button>
         )}
         <Link
@@ -269,7 +279,7 @@ export default function DashboardPage() {
                 <div className="bg-card border border-border rounded-xl p-4">
                   <div className="anvil-caps">Captured this week</div>
                   <div className="anvil-mono text-[32px] font-semibold tracking-[-0.02em] mt-1.5">{capturedThisWeek}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">interviews recorded</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">conversations captured</div>
                 </div>
                 <div className="bg-card border border-border rounded-xl p-4">
                   <div className="anvil-caps">Patterns emerging</div>

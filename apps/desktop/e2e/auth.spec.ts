@@ -30,7 +30,7 @@ test.describe("public auth pages", () => {
     await expect(page).toHaveURL("/login");
     await expect(page.locator("#email")).toBeVisible();
     await expect(page.locator("#password")).toBeVisible();
-    await expect(page.getByRole("button", { name: "Log in" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   });
 
   test("GET /signup renders the signup form", async ({ page }) => {
@@ -44,7 +44,7 @@ test.describe("public auth pages", () => {
     await page.goto("/login");
     await page.locator("#email").fill("nobody@nowhere.invalid");
     await page.locator("#password").fill("wrongpassword");
-    await page.getByRole("button", { name: "Log in" }).click();
+    await page.getByRole("button", { name: "Sign in" }).click();
     // Error rendered as <p class="text-destructive">...</p>
     await expect(page.locator("p.text-destructive")).toBeVisible({
       timeout: 10_000,

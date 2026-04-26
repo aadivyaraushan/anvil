@@ -43,4 +43,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 e2e/.auth/
+
+# supabase CLI cache (linked-project.json, pooler-url, etc.)
 supabase/.temp/
