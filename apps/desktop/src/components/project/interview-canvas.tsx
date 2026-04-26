@@ -39,10 +39,17 @@ function isUrl(value: string | null): boolean {
   return /^https?:\/\//i.test(value.trim())
 }
 
+// Handoff to the capsule (separate Tauri WebView). The capsule reads
+// localStorage on mount and re-reads when the PRESELECT_EVENT fires, so
+// this works whether the capsule is opening fresh or already on screen.
+// Constants must match apps/desktop/src/app/capsule/page.tsx.
+const PRESELECT_STORAGE_KEY = 'anvil:capsule-preselect'
+const PRESELECT_EVENT = 'capsule:preselect-changed'
+
 export function InterviewCanvas({ interview, projectId: _projectId }: InterviewCanvasProps) {
   const [followupIndex, setFollowupIndex] = useState(0)
   const [recordingError, setRecordingError] = useState<string | null>(null)
-  const { invoke, isTauri } = useTauri()
+  const { invoke, emit, isTauri } = useTauri()
 
   if (!interview) {
     return (
@@ -72,10 +79,29 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   }
 
   // The Tauri capsule owns the recording flow (mic + system audio capture,
-  // pause, stop & upload). We just summon it from here so the user can
-  // start capturing right from the conversation page.
+  // pause, stop & upload). We summon it from here, but first we hand off
+  // the current conversation's id so the upload appends to this row
+  // instead of inserting a brand-new one.
   const handleStartRecording = async () => {
     setRecordingError(null)
+    try {
+      window.localStorage.setItem(
+        PRESELECT_STORAGE_KEY,
+        JSON.stringify({
+          interview_id: interview.id,
+          project_id: interview.project_id,
+          attendee_name: interview.attendee_name,
+          ts: Date.now(),
+        })
+      )
+    } catch {
+      // localStorage can throw in private mode — non-fatal; the capsule
+      // will fall back to insert-new behavior.
+    }
+    // Notify an already-open capsule that the handoff changed. Brand-new
+    // capsule mounts read localStorage directly, so we don't depend on
+    // the event being delivered.
+    await emit(PRESELECT_EVENT)
     const result = await invoke('show_capsule')
     if (result === null) {
       setRecordingError(

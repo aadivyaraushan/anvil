@@ -64,6 +64,23 @@ export function useInterviews(projectId: string) {
     // workspace mounts so users don't sit on stale "uploading" rows
     // long after the transcript has actually landed.
     refetchOnMount: "always",
+    // Poll while any conversation is mid-upload or live. Without this,
+    // a user staring at the canvas after hitting Stop in the capsule
+    // wouldn't see the transcript appear until they navigated away and
+    // back. Stops polling once everything is in a terminal state.
+    refetchInterval: (query) => {
+      const data = query.state.data as
+        | { interviews: Interview[] }
+        | undefined;
+      if (!data) return false;
+      const anyPending = data.interviews.some(
+        (i) =>
+          i.status === "live" ||
+          i.upload_status === "uploading" ||
+          i.upload_status === "queued"
+      );
+      return anyPending ? 3000 : false;
+    },
   });
 }
 

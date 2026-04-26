@@ -45,6 +45,35 @@ function WaveformBars({ active, phase }: { active: boolean; phase: number }) {
   );
 }
 
+// Handoff key written by callers (currently the conversation canvas) before
+// they invoke `show_capsule`. We honour it on mount and on Tauri-event
+// notifications so the capsule knows which conversation row the upload
+// should land on.
+const PRESELECT_STORAGE_KEY = "anvil:capsule-preselect";
+const PRESELECT_TTL_MS = 30_000;
+const PRESELECT_EVENT = "capsule:preselect-changed";
+
+type CapsulePreselect = {
+  interview_id?: string;
+  project_id?: string;
+  attendee_name?: string | null;
+  ts?: number;
+};
+
+function readPreselect(): CapsulePreselect | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(PRESELECT_STORAGE_KEY);
+    if (!raw) return null;
+    const payload = JSON.parse(raw) as CapsulePreselect;
+    window.localStorage.removeItem(PRESELECT_STORAGE_KEY);
+    if (!payload.ts || Date.now() - payload.ts > PRESELECT_TTL_MS) return null;
+    return payload;
+  } catch {
+    return null;
+  }
+}
+
 export default function CapsulePage() {
   const { invoke, listen, isTauri, readFileBytes } = useTauri();
   const { data: projects } = useProjects();
@@ -58,17 +87,44 @@ export default function CapsulePage() {
     recording_id: null,
   });
   const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [pendingInterviewId, setPendingInterviewId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [tick, setTick] = useState(0);
+
+  // Apply a handoff from the conversation canvas if one is waiting in
+  // localStorage. Used both on mount and whenever the canvas emits the
+  // PRESELECT_EVENT (covers the case where the capsule is already open).
+  const applyPreselect = useCallback(() => {
+    const payload = readPreselect();
+    if (!payload) return;
+    if (payload.project_id) setSelectedProjectId(payload.project_id);
+    if (payload.interview_id) setPendingInterviewId(payload.interview_id);
+  }, []);
 
   // Sync state from Tauri on mount
   useEffect(() => {
     invoke<RecordingState>("get_recording_state").then((s) => {
       if (s) setRecState(s);
     });
-  }, [invoke]);
+    // Defer the handoff read so React can finish the initial commit
+    // before we trigger the state updates inside applyPreselect — keeps
+    // the lint rule against synchronous setState-in-effect happy.
+    queueMicrotask(applyPreselect);
+  }, [invoke, applyPreselect]);
+
+  // Re-read the handoff whenever the canvas emits a change. Tauri events
+  // are not buffered, so the canvas always writes localStorage AND emits
+  // the event — mount handles the race where the event fires before the
+  // listener registers.
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen<void>(PRESELECT_EVENT, () => applyPreselect()).then((fn) => {
+      unlisten = fn;
+    });
+    return () => unlisten?.();
+  }, [listen, applyPreselect]);
 
   // Listen for state-change events from Rust
   useEffect(() => {
@@ -150,6 +206,10 @@ export default function CapsulePage() {
       fd.append("project_id", recState.project_id ?? "");
       fd.append("source", "desktop");
       if (recState.attendee_name) fd.append("attendee_name", recState.attendee_name);
+      // Tell the API to append to the conversation row the user opened,
+      // not to insert a new one. Without this the transcript lands on a
+      // brand-new row and the user is left staring at an empty page.
+      if (pendingInterviewId) fd.append("interview_id", pendingInterviewId);
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL}/api/interviews/upload`,
@@ -161,6 +221,11 @@ export default function CapsulePage() {
       );
       if (!res.ok) {
         setError(`Upload failed (${res.status}). Saved locally, will retry.`);
+      } else {
+        // Handoff consumed — clear so a future "Start recording" from the
+        // dashboard or a different conversation doesn't accidentally
+        // append to this same row.
+        setPendingInterviewId(null);
       }
     } catch (e) {
       setError("Upload failed. The recording is saved locally and will retry.");
@@ -168,7 +233,7 @@ export default function CapsulePage() {
     } finally {
       setUploading(false);
     }
-  }, [invoke, readFileBytes, recState]);
+  }, [invoke, readFileBytes, recState, pendingInterviewId]);
 
   const handleClose = useCallback(async () => {
     await invoke("hide_capsule");

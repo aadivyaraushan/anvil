@@ -171,6 +171,9 @@ export default function DashboardPage() {
   async function handleStartRecording() {
     // The capsule owns the recording flow — it picks the project, invokes
     // `start_recording`, and handles the upload. Dashboard just summons it.
+    // Clear any conversation-page handoff so a stale preselect from
+    // earlier doesn't make the capsule append to the wrong row.
+    try { window.localStorage.removeItem("anvil:capsule-preselect"); } catch {}
     const result = await invokeTauri("show_capsule");
     if (result === null) {
       setRecordingToast("Tauri not available — run the desktop app to record.");
