@@ -89,7 +89,13 @@ function makeQueryStub(opts: {
 
 const userClient = {
   auth: {
-    getUser: vi.fn(async () => ({
+    // The `user` field is widened to `| null` so individual tests can
+    // override with `mockResolvedValueOnce({ data: { user: null }, ... })`
+    // to exercise the unauthenticated branch without a TS2322 cast.
+    getUser: vi.fn(async (): Promise<{
+      data: { user: { id: string } | null };
+      error: null;
+    }> => ({
       data: { user: { id: USER_ID } },
       error: null,
     })),
