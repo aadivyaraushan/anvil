@@ -457,7 +457,7 @@ describe("POST /api/interviews/upload — Deepgram and storage failure paths", (
         selectSingle: async () => ({ data: { id: PROJECT_ID }, error: null }),
       }),
     );
-    let interviewUpdates: Array<Record<string, unknown>> = [];
+    const interviewUpdates: Array<Record<string, unknown>> = [];
     serviceClient.from.mockImplementation(() => {
       const q = makeQueryStub({
         insertSingle: async () => ({
