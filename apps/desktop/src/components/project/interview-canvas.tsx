@@ -118,7 +118,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
       timerRef.current = setInterval(() => setTick((t) => t + 1), 1000)
     } else {
       if (timerRef.current) clearInterval(timerRef.current)
-      setTick(0)
+      queueMicrotask(() => setTick(0))
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current) }
   }, [recState.is_recording])
