@@ -29,7 +29,7 @@ const BASE_INTERVIEW: Interview = {
 describe("InterviewCanvas", () => {
   it("renders empty state when no interview is selected", () => {
     render(<InterviewCanvas interview={null} projectId="proj-1" />);
-    expect(screen.getByText(/select an interview/i)).toBeInTheDocument();
+    expect(screen.getByText(/select a conversation/i)).toBeInTheDocument();
   });
 
   it("renders transcript turns", () => {
@@ -72,9 +72,26 @@ describe("InterviewCanvas", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows End interview affordance for live interviews", () => {
+  it("shows End conversation affordance for live interviews", () => {
     const iv: Interview = { ...BASE_INTERVIEW, status: "live" };
     render(<InterviewCanvas interview={iv} projectId="proj-1" />);
-    expect(screen.getByRole("button", { name: /end interview/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /end conversation/i })).toBeInTheDocument();
+  });
+
+  it("shows 'In person' modality chip for inperson source", () => {
+    const iv: Interview = { ...BASE_INTERVIEW, source: "inperson" };
+    render(<InterviewCanvas interview={iv} projectId="proj-1" />);
+    expect(screen.getByText(/^In person$/)).toBeInTheDocument();
+  });
+
+  it("shows 'Online' modality chip for non-inperson sources", () => {
+    const iv: Interview = { ...BASE_INTERVIEW, source: "meet_link" };
+    render(<InterviewCanvas interview={iv} projectId="proj-1" />);
+    expect(screen.getByText(/^Online$/)).toBeInTheDocument();
+  });
+
+  it("shows the 'Live transcript' section header", () => {
+    render(<InterviewCanvas interview={BASE_INTERVIEW} projectId="proj-1" />);
+    expect(screen.getByText(/live transcript/i)).toBeInTheDocument();
   });
 });

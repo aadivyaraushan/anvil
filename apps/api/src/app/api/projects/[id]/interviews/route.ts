@@ -1,6 +1,6 @@
 import { createUserSupabaseClient, extractBearerToken } from "@/lib/supabase/server";
 import type { NextRequest } from "next/server";
-import type { MeetingPlatform } from "@/lib/supabase/types";
+import type { InterviewSource, MeetingPlatform } from "@/lib/supabase/types";
 
 export async function GET(
   req: NextRequest,
@@ -36,11 +36,16 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Conversations can be in-person or online — meeting_platform and
+  // meeting_link are both optional. Callers that omit them get a row
+  // with no link, which is the correct shape for an in-person
+  // conversation. `source` is also optional and defaults to "desktop".
   const body = await req.json() as {
     persona_id?: string | null;
-    meeting_platform: MeetingPlatform;
-    meeting_link: string;
-    scheduled_at: string;
+    source?: InterviewSource;
+    meeting_platform?: MeetingPlatform | null;
+    meeting_link?: string | null;
+    scheduled_at?: string | null;
     attendee_name?: string | null;
     attendee_company?: string | null;
   };
@@ -50,12 +55,12 @@ export async function POST(
     .insert({
       project_id: id,
       persona_id: body.persona_id ?? null,
-      meeting_platform: body.meeting_platform,
-      meeting_link: body.meeting_link,
-      scheduled_at: body.scheduled_at,
+      meeting_platform: body.meeting_platform ?? null,
+      meeting_link: body.meeting_link ?? null,
+      scheduled_at: body.scheduled_at ?? null,
       attendee_name: body.attendee_name ?? null,
       attendee_company: body.attendee_company ?? null,
-      source: "desktop" as const,
+      source: body.source ?? "desktop",
       status: "scheduled" as const,
       transcript: [],
       suggested_questions: [],

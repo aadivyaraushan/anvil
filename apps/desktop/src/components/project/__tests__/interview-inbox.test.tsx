@@ -29,6 +29,9 @@ vi.mock('@/components/error-card', () => ({
 vi.mock('lucide-react', () => ({
   Plus: () => <span data-testid="icon-plus" />,
   Link: () => <span data-testid="icon-link" />,
+  ChevronLeft: () => <span data-testid="icon-chevron-left" />,
+  MapPin: () => <span data-testid="icon-map-pin" />,
+  Video: () => <span data-testid="icon-video" />,
 }))
 
 const makeInterview = (overrides: Partial<Interview> = {}): Interview => ({
@@ -89,7 +92,7 @@ describe('InterviewInbox', () => {
     const { InterviewInbox } = await import('../interview-inbox')
     render(<InterviewInbox projectId="proj-1" onSelect={vi.fn()} />)
 
-    expect(screen.getByText('No interviews yet.')).toBeDefined()
+    expect(screen.getByText(/No conversations yet/i)).toBeDefined()
   })
 
   it('renders error card on error', async () => {
