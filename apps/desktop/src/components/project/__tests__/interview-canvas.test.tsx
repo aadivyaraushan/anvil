@@ -94,4 +94,28 @@ describe("InterviewCanvas", () => {
     render(<InterviewCanvas interview={BASE_INTERVIEW} projectId="proj-1" />);
     expect(screen.getByText(/live transcript/i)).toBeInTheDocument();
   });
+
+  it("shows Start recording buttons for scheduled conversations", () => {
+    const iv: Interview = { ...BASE_INTERVIEW, status: "scheduled", source: "inperson" };
+    render(<InterviewCanvas interview={iv} projectId="proj-1" />);
+    // One in the header, one in the empty-transcript CTA.
+    expect(
+      screen.getAllByRole("button", { name: /start recording/i }).length
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it("does not show Start recording for completed conversations", () => {
+    render(<InterviewCanvas interview={BASE_INTERVIEW} projectId="proj-1" />);
+    expect(
+      screen.queryByRole("button", { name: /start recording/i })
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not show Start recording for live conversations", () => {
+    const iv: Interview = { ...BASE_INTERVIEW, status: "live" };
+    render(<InterviewCanvas interview={iv} projectId="proj-1" />);
+    expect(
+      screen.queryByRole("button", { name: /start recording/i })
+    ).not.toBeInTheDocument();
+  });
 });
