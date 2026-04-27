@@ -264,3 +264,18 @@ test.describe("corrupted storage", () => {
     await expect(page).toHaveURL("/login");
   });
 });
+
+// Several tests above corrupt or revoke the storage-state session.
+// Restore it so later specs (interview-flow, etc.) start from a valid
+// auth state. Same shape as auth.setup.ts.
+test.afterAll(async ({ browser }) => {
+  const ctx = await browser.newContext();
+  const page = await ctx.newPage();
+  await page.goto("/login");
+  await page.locator("#email").fill(process.env.E2E_TEST_EMAIL!);
+  await page.locator("#password").fill(process.env.E2E_TEST_PASSWORD!);
+  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.waitForURL("/dashboard", { timeout: 15_000 });
+  await ctx.storageState({ path: "./e2e/.auth/user.json" });
+  await ctx.close();
+});
