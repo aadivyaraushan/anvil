@@ -102,6 +102,10 @@ export function useInterview(interviewId: string) {
   });
 }
 
+// Plan-limit-aware interview create. Routes through the api so the
+// free-tier gate fires (apps/api/src/lib/billing/enforce.ts). Throws
+// PlanLimitError on 422+code=PLAN_LIMIT so the UI can render the
+// upgrade banner inline instead of a generic "couldn't save" toast.
 export function useCreateInterview() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -116,25 +120,51 @@ export function useCreateInterview() {
       scheduledAt: string | null;
     }) => {
       const supabase = getSupabase();
-      const { data, error } = await supabase
-        .from("interviews")
-        .insert({
-          project_id: params.projectId,
-          persona_id: params.personaId,
-          source: params.source,
-          meeting_platform: params.meetingPlatform,
-          meeting_link: params.meetingLink,
-          attendee_name: params.attendeeName,
-          attendee_company: params.attendeeCompany,
-          scheduled_at: params.scheduledAt,
-          status: "scheduled" as const,
-          transcript: [],
-          suggested_questions: [],
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Interview;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("NEXT_PUBLIC_API_URL is not set");
+
+      const res = await fetch(
+        `${apiUrl}/api/projects/${params.projectId}/interviews`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            persona_id: params.personaId,
+            source: params.source,
+            meeting_platform: params.meetingPlatform,
+            meeting_link: params.meetingLink,
+            attendee_name: params.attendeeName,
+            attendee_company: params.attendeeCompany,
+            scheduled_at: params.scheduledAt,
+          }),
+        },
+      );
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          code?: string;
+          stage?: string;
+        };
+        if (body.code === "PLAN_LIMIT") {
+          const { PlanLimitError } = await import("./use-projects");
+          throw new PlanLimitError(
+            body.error ?? "Plan limit reached.",
+            body.stage ?? "interview_create",
+          );
+        }
+        throw new Error(body.error ?? `Interview create failed: ${res.status}`);
+      }
+
+      return (await res.json()) as Interview;
     },
     onSuccess: (_data, params) => {
       queryClient.invalidateQueries({ queryKey: interviewKeys.list(params.projectId) });

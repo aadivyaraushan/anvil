@@ -285,9 +285,26 @@ export async function saveAnalyst(
     console.error("[analyst] saveAnalyst doc upsert affected 0 rows");
   }
 
+  // Bump analyst_run_count alongside the status flip so PR 1's free-tier
+  // gate (apps/api/src/lib/billing/enforce.ts) can count successful
+  // historical runs and reject a 2nd attempt on the free plan. A failed
+  // run (the catch in /api/projects/[id]/analyst/route.ts that flips to
+  // 'failed') intentionally does NOT increment — we don't want a flaky
+  // OpenAI/db hiccup to consume a free user's only run.
+  const { data: currentProject } = await supabase
+    .from("projects")
+    .select("analyst_run_count")
+    .eq("id", state.projectId)
+    .maybeSingle();
+  const nextRunCount =
+    ((currentProject as { analyst_run_count?: number } | null)?.analyst_run_count ?? 0) + 1;
+
   const { error: projErr } = await supabase
     .from("projects")
-    .update({ analyst_status: "complete" })
+    .update({
+      analyst_status: "complete",
+      analyst_run_count: nextRunCount,
+    })
     .eq("id", state.projectId);
 
   if (projErr) {

@@ -248,6 +248,19 @@ function AddInterviewDrawer({ projectId, onCancel }: AddInterviewDrawerProps) {
           Cancel
         </Button>
       </div>
+      {createInterview.error &&
+        (createInterview.error as { code?: string }).code === 'PLAN_LIMIT' ? (
+        <div
+          role="alert"
+          data-testid="plan-limit-banner"
+          className="mb-2 rounded-md border border-amber-300/50 bg-amber-50 p-2 text-[11px] text-amber-900"
+        >
+          {(createInterview.error as Error).message}{' '}
+          <a href="/billing" className="underline underline-offset-2">
+            Upgrade →
+          </a>
+        </div>
+      ) : null}
       <div className="text-[11px] text-muted-foreground leading-snug">
         {mode === 'online'
           ? 'A live transcript will stream into the conversation page once the call starts.'

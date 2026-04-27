@@ -1,6 +1,7 @@
 import { createUserSupabaseClient, extractBearerToken } from "@/lib/supabase/server";
 import type { NextRequest } from "next/server";
 import type { InterviewSource, MeetingPlatform } from "@/lib/supabase/types";
+import { assertWithinLimit } from "@/lib/billing/enforce";
 
 export async function GET(
   req: NextRequest,
@@ -35,6 +36,9 @@ export async function POST(
   const supabase = createUserSupabaseClient(token);
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const limit = await assertWithinLimit(supabase, "interview_create", { projectId: id });
+  if (!limit.ok) return limit.response;
 
   // Conversations can be in-person or online — meeting_platform and
   // meeting_link are both optional. Callers that omit them get a row

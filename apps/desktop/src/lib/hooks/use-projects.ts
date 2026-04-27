@@ -49,6 +49,21 @@ export function useProject(id: string) {
   });
 }
 
+// Plan-limit-aware project create. Routed through the api so the free-tier
+// gate fires (apps/api/src/lib/billing/enforce.ts). The thrown error is a
+// PlanLimitError when the server returns 422+code=PLAN_LIMIT, so callers can
+// distinguish "you hit your limit, here's the upgrade flow" from "real
+// failure, retry."
+export class PlanLimitError extends Error {
+  readonly code = "PLAN_LIMIT" as const;
+  readonly stage: string;
+  constructor(message: string, stage: string) {
+    super(message);
+    this.name = "PlanLimitError";
+    this.stage = stage;
+  }
+}
+
 export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -59,22 +74,38 @@ export function useCreateProject() {
     }) => {
       const supabase = getSupabase();
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error("Not authenticated");
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
 
-      const { data, error } = await supabase
-        .from("projects")
-        .insert({
-          user_id: user.id,
-          name: input.name,
-          idea_description: input.idea_description,
-          target_profile: input.target_profile,
-        })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as Project;
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("NEXT_PUBLIC_API_URL is not set");
+
+      const res = await fetch(`${apiUrl}/api/projects`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(input),
+      });
+
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          code?: string;
+          stage?: string;
+        };
+        if (body.code === "PLAN_LIMIT") {
+          throw new PlanLimitError(
+            body.error ?? "Plan limit reached.",
+            body.stage ?? "project_create",
+          );
+        }
+        throw new Error(body.error ?? `Project create failed: ${res.status}`);
+      }
+
+      return (await res.json()) as Project;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.all });

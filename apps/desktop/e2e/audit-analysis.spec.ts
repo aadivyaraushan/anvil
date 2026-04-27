@@ -110,6 +110,38 @@ test.describe("audit: analysis (LLM-backed)", () => {
     expect(observedFinalStatus).toBe("failed");
   });
 
+  test("E1b free user, 2nd analyst run on same project → 422 PLAN_LIMIT", async ({
+    request,
+  }) => {
+    // Free plan: analystRuns: 1. PR 1 wired the gate at
+    // POST /api/projects/[id]/analyst, with analyst_run_count incremented
+    // by saveAnalyst on success. Stamp the count to 1 directly so we
+    // can hit the gate without running the LangGraph pipeline twice.
+    const projectId = await seedProject({
+      userId: testUserId,
+      name: "Audit E1b — analyst run cap",
+    });
+
+    const sb = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      { auth: { persistSession: false } },
+    );
+    await sb
+      .from("projects")
+      .update({ analyst_run_count: 1, analyst_status: "complete" })
+      .eq("id", projectId);
+
+    const res = await request.post(
+      `${apiBase}/api/projects/${projectId}/analyst`,
+      { headers: { Authorization: `Bearer ${userToken}` } },
+    );
+    expect(res.status()).toBe(422);
+    const body = (await res.json()) as { code?: string; stage?: string };
+    expect(body.code).toBe("PLAN_LIMIT");
+    expect(body.stage).toBe("analyst_run");
+  });
+
   test("E1 POST /analyst while another run is in progress returns 409", async ({
     request,
   }) => {

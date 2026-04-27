@@ -82,43 +82,70 @@ test.describe("audit: projects (free plan)", () => {
     expect(row.idea_description).toBe("Edited idea");
   });
 
-  test("B4 free-tier limit is NOT enforced (regression: locks in current behavior)", async ({
+  test("B4 free-tier limit is enforced — 2nd create returns 422 + inline plan-limit banner", async ({
     page,
+    request,
   }) => {
-    // The user is on plan='free' (set in beforeAll). The plan config says
-    // free = 1 project. The expected behavior is for the second creation
-    // to be blocked with a structured 422; the actual behavior is that it
-    // succeeds because no limit check exists in the codepath.
-    //
-    // When you add enforcement, this assertion will fail — flip it to
-    // expect the second create to error and assert the structured detail.
+    // Free plan = 1 project (apps/desktop/src/lib/billing/plans.ts).
+    // PR 1 wired apps/api/src/lib/billing/enforce.ts into POST /api/projects
+    // so the 2nd attempt gets a 422 with `code: 'PLAN_LIMIT'` and the
+    // dashboard/new form surfaces it inline via the upgrade banner.
 
     const sub = await getSubscription(testUserId);
     expect(sub?.plan).toBe("free");
 
-    // First project — succeeds.
+    // First project — should succeed.
     await page.goto("/dashboard/new");
     await page.locator("#name").fill("Audit B4 first");
     await page.locator("#idea_description").fill("First project on free tier");
     await page.getByRole("button", { name: /create project/i }).click();
     await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
-    // Second project — currently also succeeds (BUG: should be blocked).
+    // Second project — should be blocked by the inline plan-limit banner.
     await page.goto("/dashboard/new");
     await page.locator("#name").fill("Audit B4 second");
     await page
       .locator("#idea_description")
-      .fill("Second project — should fail on free tier but currently succeeds");
+      .fill("Second project — must be blocked on free tier");
     await page.getByRole("button", { name: /create project/i }).click();
-    // If enforcement existed, we'd expect to stay on /dashboard/new with an
-    // error. Today we expect navigation past the gate.
-    await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 15_000 });
 
+    // Stay on /dashboard/new (no navigation) and show the structured
+    // PLAN_LIMIT banner. This is the inline-error path, not a global toast.
+    await expect(page).toHaveURL(/\/dashboard\/new/);
+    await expect(page.getByTestId("plan-limit-banner")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("plan-limit-banner")).toContainText(/upgrade/i);
+
+    // DB should still only have one project — the 422 must not have inserted.
     const rows = await getProjectsForUser(testUserId);
-    expect(rows).toHaveLength(2);
-    // FIXME: when free-tier enforcement lands, change to:
-    //   expect(rows).toHaveLength(1);
-    //   expect(page).toHaveURL(/\/dashboard\/new/);
-    //   await expect(page.getByText(/upgrade.*to create/i)).toBeVisible();
+    expect(rows).toHaveLength(1);
+
+    // Direct API probe: second POST returns 422 with the structured body.
+    // (Done via request fixture so we can read the body without UI parsing.)
+    const sb2 = await import("@supabase/supabase-js");
+    const sbClient = sb2.createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      { auth: { persistSession: false } },
+    );
+    const { data: signin } = await sbClient.auth.signInWithPassword({
+      email: process.env.E2E_TEST_EMAIL!,
+      password: process.env.E2E_TEST_PASSWORD!,
+    });
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
+    const apiRes = await request.post(`${apiBase}/api/projects`, {
+      headers: { Authorization: `Bearer ${signin?.session?.access_token}` },
+      data: { name: "Audit B4 third", idea_description: "x", target_profile: "" },
+    });
+    expect(apiRes.status()).toBe(422);
+    const body = (await apiRes.json()) as {
+      code?: string;
+      stage?: string;
+      plan?: string;
+    };
+    expect(body.code).toBe("PLAN_LIMIT");
+    expect(body.stage).toBe("project_create");
+    expect(body.plan).toBe("free");
   });
 });

@@ -104,19 +104,21 @@ test.describe("audit: interviews (free plan)", () => {
     expect(interviews[0].source).not.toBe("inperson");
   });
 
-  test("C5 free-tier interview limit is NOT enforced (regression: locks in current behavior)", async ({
+  test("C5 free-tier interview limit is enforced — 3rd attempt shows plan-limit banner", async ({
     page,
   }) => {
-    // Free plan limit is `interviewsPerProject: 2`. Today this is purely
-    // UI copy — the codepath does a direct Supabase insert, no count check.
-    // Asserting the third creation succeeds — flip when enforcement lands.
+    // Free plan limit is `interviewsPerProject: 2`. PR 1 wired the gate
+    // through `POST /api/projects/[id]/interviews` so the 3rd attempt
+    // gets a 422 with code='PLAN_LIMIT' and the inbox drawer surfaces
+    // the inline upgrade banner instead of a successful insert.
 
     await page.goto(`/project/${projectId}`);
     await expect(
       page.getByRole("button", { name: /add conversation/i }),
     ).toBeVisible({ timeout: 10_000 });
 
-    for (const i of [1, 2, 3]) {
+    // Two interviews — should succeed.
+    for (const i of [1, 2]) {
       await page
         .getByRole("button", { name: /add conversation/i })
         .first()
@@ -132,10 +134,26 @@ test.describe("audit: interviews (free plan)", () => {
       });
     }
 
+    // Third — should be blocked. Plan-limit banner appears in the drawer;
+    // the row does not get inserted.
+    await page
+      .getByRole("button", { name: /add conversation/i })
+      .first()
+      .click();
+    await page
+      .locator("input[placeholder*='Attendee name']")
+      .fill("Audit C5 #3 (should fail)");
+    await page
+      .getByRole("button", { name: /^schedule conversation$/i })
+      .click();
+
+    await expect(page.getByTestId("plan-limit-banner")).toBeVisible({
+      timeout: 10_000,
+    });
+    await expect(page.getByTestId("plan-limit-banner")).toContainText(/upgrade/i);
+
     const interviews = await getInterviewsForProject(projectId);
-    expect(interviews).toHaveLength(3);
-    // FIXME: when enforcement lands, change to:
-    //   expect(interviews).toHaveLength(2);
-    //   await expect(page.getByText(/upgrade.*conversation/i)).toBeVisible();
+    expect(interviews).toHaveLength(2);
+    expect(interviews.find((i) => i.attendee_name?.includes("should fail"))).toBeUndefined();
   });
 });

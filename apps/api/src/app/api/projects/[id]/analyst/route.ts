@@ -6,6 +6,7 @@ import {
   extractBearerToken,
 } from "@/lib/supabase/server";
 import { buildAnalystGraph } from "@/lib/agents/analyst/graph";
+import { assertWithinLimit } from "@/lib/billing/enforce";
 
 export async function POST(
   req: NextRequest,
@@ -32,6 +33,9 @@ export async function POST(
   if (project.analyst_status === "generating") {
     return Response.json({ status: "already_running" }, { status: 409 });
   }
+
+  const limit = await assertWithinLimit(supabase, "analyst_run", { projectId: id });
+  if (!limit.ok) return limit.response;
 
   const serviceSupabase = createServiceSupabaseClient();
   await serviceSupabase

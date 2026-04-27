@@ -23,6 +23,8 @@ export type Project = {
   target_profile: string;
   idea_description: string;
   analyst_status: AnalystStatus;
+  // NOT NULL DEFAULT 0 in DB (migration 015) — optional on insert.
+  analyst_run_count?: number;
   created_at: string;
 };
 

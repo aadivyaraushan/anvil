@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useCreateProject } from "@/lib/hooks/use-projects";
+import { useCreateProject, PlanLimitError } from "@/lib/hooks/use-projects";
 import { ErrorCard } from "@/components/error-card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,9 +65,23 @@ export default function NewProjectPage() {
             />
           </div>
 
-          {createProject.error && (
+          {createProject.error instanceof PlanLimitError ? (
+            <div
+              role="alert"
+              data-testid="plan-limit-banner"
+              className="rounded-md border border-amber-300/50 bg-amber-50 p-3 text-sm text-amber-900"
+            >
+              <p className="font-medium">{createProject.error.message}</p>
+              <Link
+                href="/billing"
+                className="mt-1 inline-block text-amber-900 underline underline-offset-2"
+              >
+                Upgrade your plan →
+              </Link>
+            </div>
+          ) : createProject.error ? (
             <ErrorCard error={createProject.error as Error} />
-          )}
+          ) : null}
 
           <Button
             onClick={handleFinish}
