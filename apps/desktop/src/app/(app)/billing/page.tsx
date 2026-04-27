@@ -14,6 +14,22 @@ import {
 } from "@/components/ui/card";
 import type { SubscriptionPlan } from "@/lib/supabase/types";
 
+async function readErrorDetail(res: Response): Promise<string> {
+  try {
+    const body = (await res.json()) as {
+      error?: string;
+      stage?: string;
+      detail?: string;
+      code?: string;
+    };
+    if (body?.detail) return `${body.stage ?? res.status}: ${body.detail}`;
+    if (body?.error) return body.error;
+  } catch {
+    // not JSON — fall through
+  }
+  return `${res.status} ${res.statusText}`.trim();
+}
+
 export default function BillingPage() {
   const user = useUser();
   const searchParams = useSearchParams();
@@ -51,7 +67,13 @@ export default function BillingPage() {
         body: JSON.stringify({ plan: targetPlan }),
       }
     );
-    const { url } = await res.json();
+    if (!res.ok) {
+      const detail = await readErrorDetail(res);
+      console.error("[billing] checkout failed:", detail);
+      window.alert(`Checkout failed — ${detail}`);
+      return;
+    }
+    const { url } = (await res.json()) as { url?: string };
     if (url) window.open(url, "_blank");
   };
 
@@ -65,7 +87,13 @@ export default function BillingPage() {
         headers: { Authorization: `Bearer ${token}` },
       }
     );
-    const { url } = await res.json();
+    if (!res.ok) {
+      const detail = await readErrorDetail(res);
+      console.error("[billing] portal failed:", detail);
+      window.alert(`Could not open billing portal — ${detail}`);
+      return;
+    }
+    const { url } = (await res.json()) as { url?: string };
     if (url) window.open(url, "_blank");
   };
 

@@ -21,10 +21,30 @@ export async function POST(req: NextRequest) {
   }
 
   const stripe = getStripe();
-  const session = await stripe.billingPortal.sessions.create({
-    customer: sub.stripe_customer_id,
-    return_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
-  });
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
 
-  return NextResponse.json({ url: session.url });
+  try {
+    const session = await stripe.billingPortal.sessions.create({
+      customer: sub.stripe_customer_id,
+      return_url: `${appUrl}/billing`,
+    });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    const e = err as {
+      type?: string;
+      code?: string;
+      message?: string;
+      param?: string;
+    };
+    console.error("[stripe/portal] session create failed:", e);
+    return NextResponse.json(
+      {
+        error: "Stripe portal failed",
+        stage: "portal_session_create",
+        detail: e.message ?? null,
+        code: e.code ?? null,
+      },
+      { status: 500 },
+    );
+  }
 }

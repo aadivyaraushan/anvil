@@ -227,6 +227,136 @@ export async function seedAnalystDocument(opts: {
   if (error) throw new Error(`seedAnalystDocument failed: ${error.message}`);
 }
 
+// ---------------------------------------------------------------------------
+// Read helpers — used by persistence-* audit specs to assert that the user
+// flow actually wrote to the DB, not just that the UI showed a success state.
+// ---------------------------------------------------------------------------
+
+export async function getProjectsForUser(userId: string): Promise<
+  Array<{
+    id: string;
+    name: string;
+    idea_description: string | null;
+    target_profile: string | null;
+    created_at: string;
+  }>
+> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("projects")
+    .select("id, name, idea_description, target_profile, created_at")
+    .eq("user_id", userId);
+  if (error) throw new Error(`getProjectsForUser failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function getInterviewsForProject(projectId: string): Promise<
+  Array<{
+    id: string;
+    project_id: string;
+    status: string;
+    upload_status: string | null;
+    attendee_name: string | null;
+    meeting_link: string | null;
+    source: string;
+    transcript: unknown;
+    recording_path: string | null;
+    scheduled_at: string | null;
+  }>
+> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("interviews")
+    .select(
+      "id, project_id, status, upload_status, attendee_name, meeting_link, source, transcript, recording_path, scheduled_at",
+    )
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`getInterviewsForProject failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function getAnalystDocument(
+  projectId: string,
+): Promise<{
+  project_id: string;
+  pain_points: unknown;
+  patterns: unknown;
+  key_quotes: unknown;
+  saturation_score: number | null;
+  interview_count: number | null;
+} | null> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("analyst_documents")
+    .select(
+      "project_id, pain_points, patterns, key_quotes, saturation_score, interview_count",
+    )
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error) throw new Error(`getAnalystDocument failed: ${error.message}`);
+  return data;
+}
+
+export async function getPersonasForProject(
+  projectId: string,
+): Promise<Array<{ id: string; name: string; status: string | null }>> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("personas")
+    .select("id, name, status")
+    .eq("project_id", projectId);
+  if (error) throw new Error(`getPersonasForProject failed: ${error.message}`);
+  return data ?? [];
+}
+
+export async function getCalendarConnection(
+  userId: string,
+): Promise<{
+  user_id: string;
+  provider: string;
+  calendar_email: string | null;
+  expires_at: string | null;
+} | null> {
+  const supabase = adminClient();
+  // Column is `calendar_email`, not `email` — the OAuth callback writes
+  // it as such (see apps/api/src/app/api/calendar/google/callback/route.ts).
+  const { data, error } = await supabase
+    .from("calendar_connections")
+    .select("user_id, provider, calendar_email, expires_at")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`getCalendarConnection failed: ${error.message}`);
+  return data;
+}
+
+export async function getSubscription(
+  userId: string,
+): Promise<{
+  user_id: string;
+  plan: "free" | "pro" | "max";
+  status: string;
+  stripe_customer_id: string | null;
+} | null> {
+  const supabase = adminClient();
+  const { data, error } = await supabase
+    .from("subscriptions")
+    .select("user_id, plan, status, stripe_customer_id")
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`getSubscription failed: ${error.message}`);
+  return data;
+}
+
+export async function deleteInterview(interviewId: string): Promise<void> {
+  const supabase = adminClient();
+  const { error } = await supabase
+    .from("interviews")
+    .delete()
+    .eq("id", interviewId);
+  if (error) throw new Error(`deleteInterview failed: ${error.message}`);
+}
+
 export async function upsertSubscription(opts: {
   userId: string;
   plan?: "free" | "pro" | "max";

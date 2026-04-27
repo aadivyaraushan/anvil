@@ -46,3 +46,10 @@ e2e/.auth/
 
 # supabase CLI cache (linked-project.json, pooler-url, etc.)
 supabase/.temp/
+.env*.local
+
+# Playwright MCP browser snapshot/console artifacts
+.playwright-mcp/
+
+# Claude Code worktrees + ephemeral working notes
+.claude/worktrees/

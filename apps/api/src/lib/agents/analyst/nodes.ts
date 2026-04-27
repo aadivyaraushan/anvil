@@ -238,39 +238,51 @@ export async function saveAnalyst(
   const result = state.analystResult!;
   const supabase = createServiceSupabaseClient();
 
-  const { error: docErr } = await supabase
+  // Upsert (not update) so a missing analyst_documents row lands instead
+  // of being silently dropped. Same pattern that hid the recording
+  // transcript-save bug — `.update().eq()` returns error: null when zero
+  // rows match, so a missing pre-seeded row meant the analyst pipeline
+  // would log an empty error and the row would never be written.
+  // `.select("project_id")` forces a 0-row result to surface as an error
+  // we can act on.
+  const docPayload = {
+    project_id: state.projectId,
+    content: {
+      summary: result.summary,
+      recommendations: result.recommendations,
+      customerLanguage: result.customerLanguage,
+      personas: result.personas,
+    },
+    pain_points: result.painPoints.map((p) => ({
+      title: p.description,
+      severity: (["high", "medium", "low"].includes(p.severity)
+        ? p.severity
+        : "medium") as "high" | "medium" | "low",
+      count: p.frequency,
+      example_quote: p.quotes[0]?.text,
+      example_source: p.quotes[0]?.interview_id,
+    })),
+    patterns: result.patterns,
+    key_quotes: result.keyQuotes.map((q) => ({
+      quote: q.quote,
+      speaker: "",
+      interview_id: q.interview_id,
+      tags: [],
+    })),
+    customer_language: result.customerLanguage,
+    saturation_score: result.saturationScore,
+    interview_count: state.interviews.length,
+    unique_pattern_count: result.uniquePatternCount,
+  };
+  const { error: docErr, data: docRows } = await supabase
     .from("analyst_documents")
-    .update({
-      content: {
-        summary: result.summary,
-        recommendations: result.recommendations,
-        customerLanguage: result.customerLanguage,
-        personas: result.personas,
-      },
-      pain_points: result.painPoints.map((p) => ({
-        title: p.description,
-        severity: (["high", "medium", "low"].includes(p.severity)
-          ? p.severity
-          : "medium") as "high" | "medium" | "low",
-        count: p.frequency,
-        example_quote: p.quotes[0]?.text,
-        example_source: p.quotes[0]?.interview_id,
-      })),
-      patterns: result.patterns,
-      key_quotes: result.keyQuotes.map((q) => ({
-        quote: q.quote,
-        speaker: "",
-        interview_id: q.interview_id,
-        tags: [],
-      })),
-      saturation_score: result.saturationScore,
-      interview_count: state.interviews.length,
-      unique_pattern_count: result.uniquePatternCount,
-    })
-    .eq("project_id", state.projectId);
+    .upsert(docPayload, { onConflict: "project_id" })
+    .select("project_id");
 
   if (docErr) {
-    console.error("[analyst] saveAnalyst doc update failed:", docErr.message);
+    console.error("[analyst] saveAnalyst doc upsert failed:", docErr.message);
+  } else if (!docRows || docRows.length === 0) {
+    console.error("[analyst] saveAnalyst doc upsert affected 0 rows");
   }
 
   const { error: projErr } = await supabase

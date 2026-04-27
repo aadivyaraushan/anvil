@@ -86,13 +86,37 @@ type SupabaseQueryShape = {
 function makeQueryStub(opts: {
   selectSingle?: () => Promise<{ data: unknown; error: unknown | null }>;
   insertSingle?: () => Promise<{ data: unknown; error: unknown | null }>;
-  updateResult?: () => Promise<{ error: unknown | null }>;
+  updateResult?: () => Promise<{
+    error: unknown | null;
+    data?: unknown;
+    count?: number;
+  }>;
 }): SupabaseQueryShape {
   const q = {} as SupabaseQueryShape;
   q.select = vi.fn(() => q);
   q.insert = vi.fn(() => q);
+  // `.update().eq()` must support both `await .eq()` (legacy callers that
+  // don't care about row count) AND `.eq().select(...)` (callers that need
+  // to detect 0-row updates). Returning a thenable with a `.select` method
+  // lets the same mock satisfy both shapes.
   q.update = vi.fn(() => ({
-    eq: vi.fn(async () => (opts.updateResult ? opts.updateResult() : { error: null })),
+    eq: vi.fn(() => {
+      const resultPromise = opts.updateResult
+        ? opts.updateResult()
+        : Promise.resolve({
+            error: null,
+            data: [{ id: "mock-row-id" }],
+            count: 1,
+          });
+      const builder = {
+        then: <TResult1, TResult2>(
+          onFulfilled?: ((value: unknown) => TResult1) | null,
+          onRejected?: ((reason: unknown) => TResult2) | null,
+        ) => resultPromise.then(onFulfilled as never, onRejected as never),
+        select: vi.fn(() => resultPromise),
+      };
+      return builder;
+    }),
   })) as unknown as SupabaseQueryShape["update"];
   q.eq = vi.fn(() => q);
   q.single = vi.fn(async () =>
@@ -193,7 +217,10 @@ function happyPathSetup() {
       }),
       updateResult: async () => {
         updateInvocations += 1;
-        return { error: null };
+        // Return a non-empty `data` so callers that chain `.select()` after
+        // `.update().eq()` see rows-updated > 0. The persist path in the
+        // upload route uses `.select("id")` to detect 0-row updates.
+        return { error: null, data: [{ id: "iv-ccc" }], count: 1 };
       },
     }),
   );
@@ -541,6 +568,161 @@ describe("POST /api/interviews/upload — Deepgram and storage failure paths", (
     expect(
       fetchSpy.mock.calls.some((c) => String(c[0]).includes("deepgram")),
     ).toBe(false);
+    fetchSpy.mockRestore();
+  });
+
+  it("marks upload_status='failed' when the final transcript persist returns an error", async () => {
+    // Project lookup OK, insert OK, storage OK — but the final .update
+    // that writes the transcript returns an error from Supabase. The
+    // route must call markFailed so the canvas doesn't strand on
+    // status='live'.
+    userClient.from.mockImplementation(() =>
+      makeQueryStub({
+        selectSingle: async () => ({ data: { id: PROJECT_ID }, error: null }),
+      }),
+    );
+    let updateCallNumber = 0;
+    serviceClient.from.mockImplementation(() =>
+      makeQueryStub({
+        insertSingle: async () => ({ data: { id: "iv-persist-err" }, error: null }),
+        updateResult: async () => {
+          updateCallNumber += 1;
+          // Insert-new path: update #1 is recording_path, update #2 is the
+          // transcript persist (the one we want to fail). markFailed will
+          // then be #3.
+          if (updateCallNumber === 2) {
+            return {
+              error: { message: "constraint violation", code: "23514" },
+              data: null,
+            };
+          }
+          return { error: null, data: [{ id: "iv-persist-err" }], count: 1 };
+        },
+      }),
+    );
+    serviceClient.storage.from.mockImplementation(() => ({
+      upload: vi.fn(async () => ({ data: { path: "x" }, error: null })),
+      createSignedUrl: vi.fn(async () => ({
+        data: { signedUrl: "https://signed.example/audio.wav" },
+        error: null,
+      })),
+    }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ results: { utterances: [{ speaker: 0, transcript: "hi", start: 0 }] } }),
+        { status: 200 },
+      ),
+    );
+
+    const { POST } = await importRoute();
+    const res = await POST(buildUploadRequest() as never);
+    expect(res.status).toBe(201);
+
+    // Wait for the after() chain to flush.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const sawFailed = serviceClient.from.mock.results.some((r) => {
+      const builder = r.value as SupabaseQueryShape;
+      return builder.update.mock.calls.some(
+        (args) => (args[0] as Record<string, unknown>).upload_status === "failed",
+      );
+    });
+    expect(sawFailed).toBe(true);
+    fetchSpy.mockRestore();
+  });
+
+  it("marks upload_status='failed' when the final persist update affects 0 rows (silent failure)", async () => {
+    // The bug we fixed: `.update().eq()` on a missing/invisible row returns
+    // `error: null` but `data: []`. Without `.select("id")` to surface it,
+    // we'd report success while writing nothing. Mock that exact shape.
+    userClient.from.mockImplementation(() =>
+      makeQueryStub({
+        selectSingle: async () => ({ data: { id: PROJECT_ID }, error: null }),
+      }),
+    );
+    let updateCallNumber = 0;
+    serviceClient.from.mockImplementation(() =>
+      makeQueryStub({
+        insertSingle: async () => ({ data: { id: "iv-zero-rows" }, error: null }),
+        updateResult: async () => {
+          updateCallNumber += 1;
+          if (updateCallNumber === 2) {
+            // 0-row persist — error null, empty data. The fix is what
+            // catches this; without `.select("id")` the route would treat
+            // it as success.
+            return { error: null, data: [], count: 0 };
+          }
+          return { error: null, data: [{ id: "iv-zero-rows" }], count: 1 };
+        },
+      }),
+    );
+    serviceClient.storage.from.mockImplementation(() => ({
+      upload: vi.fn(async () => ({ data: { path: "x" }, error: null })),
+      createSignedUrl: vi.fn(async () => ({
+        data: { signedUrl: "https://signed.example/audio.wav" },
+        error: null,
+      })),
+    }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ results: { utterances: [{ speaker: 0, transcript: "hi", start: 0 }] } }),
+        { status: 200 },
+      ),
+    );
+
+    const { POST } = await importRoute();
+    const res = await POST(buildUploadRequest() as never);
+    expect(res.status).toBe(201);
+
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const sawFailed = serviceClient.from.mock.results.some((r) => {
+      const builder = r.value as SupabaseQueryShape;
+      return builder.update.mock.calls.some(
+        (args) => (args[0] as Record<string, unknown>).upload_status === "failed",
+      );
+    });
+    expect(sawFailed).toBe(true);
+    fetchSpy.mockRestore();
+  });
+
+  it("strips `;codecs=...` from file MIME before uploading to Storage (regression: Chromium MediaRecorder labels chunks audio/webm;codecs=opus)", async () => {
+    happyPathSetup();
+    let observedContentType: string | undefined;
+    serviceClient.storage.from.mockImplementation(() => ({
+      upload: vi.fn(async (_path: string, _buf: ArrayBuffer, opts: { contentType?: string }) => {
+        observedContentType = opts?.contentType;
+        return { data: { path: "x" }, error: null };
+      }),
+      createSignedUrl: vi.fn(async () => ({
+        data: { signedUrl: "https://signed.example/audio.wav" },
+        error: null,
+      })),
+    }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ results: { utterances: [] } }), { status: 200 }),
+    );
+
+    const fd = new FormData();
+    fd.set(
+      "file",
+      new File(["webm-bytes"], "recording.webm", {
+        type: "audio/webm;codecs=opus",
+      }),
+    );
+    fd.set("project_id", PROJECT_ID);
+    const req = new Request("http://localhost:3001/api/interviews/upload", {
+      method: "POST",
+      headers: { authorization: `Bearer ${VALID_TOKEN}` },
+      body: fd,
+    });
+
+    const { POST } = await importRoute();
+    const res = await POST(req as never);
+    expect(res.status).toBe(201);
+    expect(observedContentType).toBe("audio/webm");
     fetchSpy.mockRestore();
   });
 

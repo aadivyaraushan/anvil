@@ -29,16 +29,43 @@ export async function POST(req: NextRequest) {
 
   const customerId = sub?.stripe_customer_id ?? undefined;
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "subscription",
-    customer: customerId,
-    customer_email: customerId ? undefined : user.email,
-    line_items: [{ price: planConfig.stripePriceId, quantity: 1 }],
-    success_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing?success=true`,
-    cancel_url: `${process.env.NEXT_PUBLIC_APP_URL}/billing`,
-    metadata: { user_id: user.id, plan },
-    subscription_data: { metadata: { user_id: user.id, plan } },
-  });
+  // Without NEXT_PUBLIC_APP_URL set, success_url/cancel_url become
+  // "undefined/billing?..." and Stripe rejects with `url_invalid`. Fall
+  // back to the request's origin so local dev works without extra env.
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? new URL(req.url).origin;
 
-  return NextResponse.json({ url: session.url });
+  try {
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      customer_email: customerId ? undefined : user.email,
+      line_items: [{ price: planConfig.stripePriceId, quantity: 1 }],
+      success_url: `${appUrl}/billing?success=true`,
+      cancel_url: `${appUrl}/billing`,
+      metadata: { user_id: user.id, plan },
+      subscription_data: { metadata: { user_id: user.id, plan } },
+    });
+    return NextResponse.json({ url: session.url });
+  } catch (err) {
+    // Stripe SDK errors carry { type, code, message, param } — surface them
+    // so the client can show a meaningful message instead of crashing on
+    // an empty 500 body.
+    const e = err as {
+      type?: string;
+      code?: string;
+      message?: string;
+      param?: string;
+    };
+    console.error("[stripe/checkout] session create failed:", e);
+    return NextResponse.json(
+      {
+        error: "Stripe checkout failed",
+        stage: "checkout_session_create",
+        detail: e.message ?? null,
+        code: e.code ?? null,
+        param: e.param ?? null,
+      },
+      { status: 500 },
+    );
+  }
 }

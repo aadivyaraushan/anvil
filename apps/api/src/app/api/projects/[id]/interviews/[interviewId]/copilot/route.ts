@@ -25,6 +25,26 @@ export async function GET(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
+  // Plan gate — copilot is a Pro+ feature per apps/desktop/src/lib/billing/plans.ts
+  // (`liveAICopilot: true` for pro/max, false for free). Without this check
+  // free users could drain LLM credits on a feature they didn't pay for.
+  const { data: subscription } = await supabase
+    .from("subscriptions")
+    .select("plan, status")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const plan = (subscription as { plan?: string } | null)?.plan ?? "free";
+  if (plan === "free") {
+    return Response.json(
+      {
+        error: "Live conversation copilot requires a Pro or Max plan.",
+        code: "PLAN_LIMIT",
+        feature: "liveAICopilot",
+      },
+      { status: 402 },
+    );
+  }
+
   // Fetch interview + project in parallel
   const [interviewResult, projectResult] = await Promise.all([
     supabase.from("interviews").select("*").eq("id", interviewId).single(),

@@ -1,0 +1,49 @@
+{
+  "summary": "Across the interviews, customers describe lengthy manual reporting cycles and fragmented data systems that block timely decision-making.",
+  "painPoints": [
+    {
+      "description": "Manual monthly reporting consumes multiple days of finance team time",
+      "severity": "high",
+      "frequency": 2,
+      "quotes": [
+        {
+          "text": "We spend three days every month closing the books",
+          "contact_id": "",
+          "interview_id": ""
+        }
+      ]
+    },
+    {
+      "description": "Customer data is fragmented across many tools",
+      "severity": "medium",
+      "frequency": 1,
+      "quotes": [
+        {
+          "text": "I have to check four different dashboards",
+          "contact_id": "",
+          "interview_id": ""
+        }
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "name": "Manual close cycle",
+      "description": "Repeated mention of multi-day end-of-month closing as a top pain.",
+      "interviewIds": []
+    }
+  ],
+  "keyQuotes": [
+    {
+      "quote": "We spend three days every month closing the books",
+      "contact_id": "",
+      "interview_id": ""
+    }
+  ],
+  "customerLanguage": ["closing the books", "monthly close", "data silos"],
+  "saturationScore": 60,
+  "uniquePatternCount": 1,
+  "recommendations": [
+    "Prototype an automated monthly close workflow and run it past two interview participants for validation."
+  ]
+}

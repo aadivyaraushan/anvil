@@ -226,10 +226,29 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
         body: fd,
       })
       if (!res.ok) {
-        setRecordingError(`Upload failed (${res.status}). Please try again.`)
+        // Surface the route's structured error (stage/detail/code) instead
+        // of swallowing it behind a generic "Upload failed (500)". The
+        // upload route returns JSON like { error, stage, detail, code }.
+        let detail = `${res.status}`
+        try {
+          const body = (await res.json()) as {
+            error?: string
+            stage?: string
+            detail?: string
+            code?: string
+          }
+          if (body?.detail) detail = `${body.stage ?? res.status}: ${body.detail}`
+          else if (body?.error) detail = body.error
+        } catch {
+          // body wasn't JSON — keep the status code
+        }
+        setRecordingError(`Upload failed — ${detail}. Please try again.`)
+        console.error('[canvas] upload failed:', detail)
       }
     } catch (e) {
-      setRecordingError('Upload failed. Please try again.')
+      setRecordingError(
+        e instanceof Error ? `Upload failed — ${e.message}. Please try again.` : 'Upload failed. Please try again.',
+      )
       console.error('[canvas] upload failed:', e)
     } finally {
       setUploading(false)

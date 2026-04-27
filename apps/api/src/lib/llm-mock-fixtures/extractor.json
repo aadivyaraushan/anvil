@@ -1,0 +1,17 @@
+{
+  "painPoints": [
+    {
+      "description": "Manual reporting takes too long each month",
+      "severity": "high",
+      "quote": "We spend three days every month closing the books"
+    },
+    {
+      "description": "Customer data is scattered across multiple tools",
+      "severity": "medium",
+      "quote": "I have to check four different dashboards"
+    }
+  ],
+  "topics": ["reporting", "data-silos", "monthly-close"],
+  "customerLanguage": ["closing the books", "four different dashboards", "manual reporting"],
+  "keyQuote": "We spend three days every month closing the books"
+}

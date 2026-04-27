@@ -1,0 +1,14 @@
+[
+  {
+    "name": "The Overwhelmed Finance Lead",
+    "description": "Heads finance at a 50-200 person company. Owns the monthly close and quarterly board reporting. Already drowning in spreadsheets and feels every new system makes it worse before it gets better.",
+    "job_titles": ["Head of Finance", "Finance Director"],
+    "pain_points": ["Multi-day monthly close", "Manual reconciliation across tools"]
+  },
+  {
+    "name": "The Data-Hungry Operator",
+    "description": "Operations or RevOps lead who needs cross-tool data daily and is constantly building one-off dashboards in Looker or Mode. Wants a single source of truth they can trust.",
+    "job_titles": ["Head of RevOps", "Director of Operations"],
+    "pain_points": ["Fragmented data across tools", "Brittle one-off dashboards"]
+  }
+]

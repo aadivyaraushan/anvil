@@ -125,10 +125,30 @@ export async function POST(req: NextRequest) {
       }>
     ) ?? [];
 
-    await serviceSupabase
+    // `.select("id")` forces the response to surface a 0-row update — without
+    // it, an update that matches no rows (e.g. interview deleted mid-stream)
+    // returns `error: null` and we'd silently drop the chunk's transcript.
+    const { error: updateError, data: updatedRows } = await serviceSupabase
       .from("interviews")
       .update({ transcript: [...existing, ...newSegments] })
-      .eq("id", interview_id);
+      .eq("id", interview_id)
+      .select("id");
+
+    if (updateError || !updatedRows || updatedRows.length === 0) {
+      console.error(
+        "[transcribe-chunk] transcript update failed:",
+        updateError ?? "no rows updated"
+      );
+      return Response.json(
+        {
+          error: "Failed to persist transcript chunk",
+          stage: "transcript_update",
+          detail: updateError?.message ?? "no rows updated",
+          code: updateError?.code ?? null,
+        },
+        { status: 500 }
+      );
+    }
   }
 
   return Response.json({ segments: newSegments }, { status: 200 });

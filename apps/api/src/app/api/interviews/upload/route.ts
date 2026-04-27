@@ -134,19 +134,27 @@ export async function POST(req: NextRequest) {
   const fileBuffer = await file.arrayBuffer();
   const storagePath = `${user.id}/${project_id}/${interview.id}/${file.name}`;
 
+  // Strip the `;codecs=...` parameter — Chromium MediaRecorder labels chunks
+  // as `audio/webm;codecs=opus`, but Supabase Storage's MIME allowlist only
+  // matches the bare type. Without this, every Chromium recording 415s.
+  const rawMime = file.type || "audio/mpeg";
+  const contentType = rawMime.split(";")[0].trim() || "audio/mpeg";
+
   const { error: uploadError } = await serviceSupabase.storage
     .from("recordings")
     .upload(storagePath, fileBuffer, {
-      contentType: file.type || "audio/mpeg",
+      contentType,
       upsert: false,
     });
 
   if (uploadError) {
     console.error("[upload] storage upload failed:", uploadError);
-    // Mark as failed if upload fails
+    // Mark as failed AND drop status back to 'scheduled' — without the status
+    // reset, the UI sees status='live' from the earlier flip and shows "End
+    // conversation" instead of "Start recording", stranding the user.
     await serviceSupabase
       .from("interviews")
-      .update({ upload_status: "failed" })
+      .update({ upload_status: "failed", status: "scheduled" })
       .eq("id", interview.id);
     return Response.json(
       {
@@ -256,16 +264,22 @@ async function transcribeAndPersist(args: {
     timestamp: Math.round((u.start ?? 0) * 1000),
   }));
 
-  const { error: persistErr } = await serviceSupabase
+  // `.select("id")` makes a 0-row update observable. Without it, if the
+  // interview was deleted (or never existed under this id), `.update()`
+  // returns `error: null` and we'd report success while writing nothing.
+  const { error: persistErr, data: persistedRows } = await serviceSupabase
     .from("interviews")
     .update({
       transcript,
       upload_status: "done",
       status: "completed",
     })
-    .eq("id", interviewId);
+    .eq("id", interviewId)
+    .select("id");
 
   if (persistErr) {
     await markFailed(`persist transcript failed: ${persistErr.message}`);
+  } else if (!persistedRows || persistedRows.length === 0) {
+    await markFailed("persist transcript affected 0 rows");
   }
 }
