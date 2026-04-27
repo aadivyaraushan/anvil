@@ -146,7 +146,10 @@ jobs:
         env:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL || 'http://localhost:54321' }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'test_anon_key' }}
-          NEXT_PUBLIC_API_URL: http://localhost:3100
+          # Must match the api dev server port (apps/api/package.json: dev = next dev --port 3001).
+          # Was 3100 before — that mismatch broke every UI-driven create after PR 1
+          # routed `useCreateProject`/`useCreateInterview` through the api.
+          NEXT_PUBLIC_API_URL: http://localhost:3001
         run: pnpm build
 
       - name: Install Playwright
@@ -155,14 +158,32 @@ jobs:
 
       - name: Run E2E tests
         working-directory: apps/desktop
+        # Playwright config (apps/desktop/playwright.config.ts) spins up two
+        # webServers: the desktop static export on :3000 and the api dev
+        # server on :3001. The api server inherits Supabase + Stripe +
+        # Google secrets from this step's env via process.env.
         run: pnpm test:e2e
         env:
           BASE_URL: http://localhost:3000
+          NEXT_PUBLIC_API_URL: http://localhost:3001
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
           E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          # Api server reads these — needed by routes covered in the audit suite.
+          # If a secret is unset, the relevant test will fail with a clear
+          # "missing env" error rather than a confusing route-level crash.
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+          STRIPE_WEBHOOK_SECRET: ${{ secrets.STRIPE_WEBHOOK_SECRET }}
+          STRIPE_PRO_PRICE_ID: ${{ secrets.STRIPE_PRO_PRICE_ID }}
+          STRIPE_MAX_PRICE_ID: ${{ secrets.STRIPE_MAX_PRICE_ID }}
+          GOOGLE_CLIENT_ID: ${{ secrets.GOOGLE_CLIENT_ID }}
+          GOOGLE_CLIENT_SECRET: ${{ secrets.GOOGLE_CLIENT_SECRET }}
+          GOOGLE_REDIRECT_URI: ${{ secrets.GOOGLE_REDIRECT_URI }}
+          NEXT_PUBLIC_APP_URL: http://localhost:3000
 
       - name: Upload Playwright traces
         uses: actions/upload-artifact@v4
