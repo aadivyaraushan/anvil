@@ -267,8 +267,13 @@ test.describe("corrupted storage", () => {
 
 // Several tests above corrupt or revoke the storage-state session.
 // Restore it so later specs (interview-flow, etc.) start from a valid
-// auth state. Same shape as auth.setup.ts.
-test.afterAll(async ({ browser }) => {
+// auth state. Same shape as auth.setup.ts. Only runs in chromium —
+// the webkit-smoke project runs the cross-browser smoke specs only
+// (recording.spec.ts + lifecycle.spec.ts) and doesn't pollute the
+// shared storage state, plus webkit's form-fill mishandles the
+// password's escape character.
+test.afterAll(async ({ browser, browserName }) => {
+  if (browserName !== "chromium") return;
   const ctx = await browser.newContext();
   const page = await ctx.newPage();
   await page.goto("/login");
