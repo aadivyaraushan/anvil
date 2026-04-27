@@ -82,6 +82,11 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const streamRef = useRef<MediaStream | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  // Accumulate all MediaRecorder chunks so we can send a single
+  // complete file. WebM only includes container headers in the first
+  // chunk — sending individual chunks to Deepgram's batch API produces
+  // undecodable fragments for all chunks after the first.
+  const chunksRef = useRef<Blob[]>([])
   // Capture which interview this recording is for in case the user
   // navigates to another conversation before stopping.
   const recordingInterviewRef = useRef<Interview | null>(null)
@@ -131,6 +136,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   const handleStartRecording = async () => {
     setRecordingError(null)
     recordingInterviewRef.current = interview
+    chunksRef.current = []
 
     let stream: MediaStream
     try {
@@ -141,16 +147,6 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
     }
     streamRef.current = stream
 
-    // Verify we're signed in before starting; don't capture token in closure
-    // so it's refreshed per-chunk (Supabase handles token rotation internally).
-    const { getSupabase } = await import('@/lib/supabase/client')
-    const { data: { session: initialSession } } = await getSupabase().auth.getSession()
-    if (!initialSession) {
-      setRecordingError('Not signed in. Please sign in again.')
-      stream.getTracks().forEach((t) => t.stop())
-      return
-    }
-
     const apiBase = process.env.NEXT_PUBLIC_API_URL
     if (!apiBase) {
       setRecordingError('API URL not configured — check NEXT_PUBLIC_API_URL in .env.local.')
@@ -158,42 +154,18 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
       return
     }
 
-    const capturedInterview = interview
-    let chunkCount = 0
-
-    const sendChunk = async (data: Blob) => {
-      if (data.size === 0) return
-      const timeOffsetSecs = chunkCount * 10
-      chunkCount++
-
-      // Re-fetch session each chunk so the token is always fresh.
-      const { data: { session } } = await getSupabase().auth.getSession()
-      const token = session?.access_token
-      if (!token) return
-
-      const fd = new FormData()
-      fd.append('audio', data, `chunk-${chunkCount}.webm`)
-      fd.append('interview_id', capturedInterview.id)
-      fd.append('time_offset_secs', String(timeOffsetSecs))
-
-      try {
-        await fetch(`${apiBase}/api/interviews/transcribe-chunk`, {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: fd,
-        })
-      } catch (e) {
-        console.error('[canvas] chunk upload failed:', e)
-      }
-    }
-
     const mimeType = pickMimeType()
     const recorder = new MediaRecorder(stream, mimeType ? { mimeType } : undefined)
     mediaRecorderRef.current = recorder
 
-    recorder.ondataavailable = (e) => { sendChunk(e.data) }
+    // Collect every chunk into a buffer. WebM only includes container
+    // headers in the first chunk, so individual chunks sent to Deepgram's
+    // batch API are undecodable after the first. We concatenate on stop.
+    recorder.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data)
+    }
 
-    recorder.start(10_000) // send a chunk every 10 seconds
+    recorder.start(10_000) // request data every 10 s to bound memory
     setIsRecording(true)
   }
 
@@ -202,18 +174,66 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
     if (!recorder || recorder.state === 'inactive') return
     setUploading(true)
 
+    // Wait for the final ondataavailable + onstop before reading chunks.
     await new Promise<void>((resolve) => {
       recorder.onstop = () => resolve()
-      recorder.requestData() // flush the in-progress chunk
+      recorder.requestData()
       recorder.stop()
     })
 
     streamRef.current?.getTracks().forEach((t) => t.stop())
     streamRef.current = null
     mediaRecorderRef.current = null
-    recordingInterviewRef.current = null
     setIsRecording(false)
-    setUploading(false)
+
+    const capturedInterview = recordingInterviewRef.current ?? interview
+    recordingInterviewRef.current = null
+    const chunks = chunksRef.current
+    chunksRef.current = []
+
+    if (chunks.length === 0) {
+      setUploading(false)
+      return
+    }
+
+    try {
+      const { getSupabase } = await import('@/lib/supabase/client')
+      const { data: { session } } = await getSupabase().auth.getSession()
+      const token = session?.access_token
+      if (!token) {
+        setRecordingError('Not signed in. Please sign in again.')
+        setUploading(false)
+        return
+      }
+
+      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
+      const mimeType = chunks[0]?.type || 'audio/webm'
+      const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
+      const blob = new Blob(chunks, { type: mimeType })
+
+      const fd = new FormData()
+      fd.append('file', blob, `recording.${ext}`)
+      fd.append('project_id', capturedInterview.project_id ?? '')
+      fd.append('source', 'desktop')
+      if (capturedInterview.attendee_name) {
+        fd.append('attendee_name', capturedInterview.attendee_name)
+      }
+      fd.append('interview_id', capturedInterview.id)
+
+      const res = await fetch(`${apiBase}/api/interviews/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd,
+      })
+      if (!res.ok) {
+        setRecordingError(`Upload failed (${res.status}). Please try again.`)
+      }
+    } catch (e) {
+      setRecordingError('Upload failed. Please try again.')
+      console.error('[canvas] upload failed:', e)
+    } finally {
+      setUploading(false)
+    }
   }
 
   return (
@@ -349,8 +369,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
             <div className="text-[13px] text-muted-foreground leading-relaxed">
               {isRecording ? (
                 <>
-                  Listening… transcript segments will appear here every ~10 seconds
-                  as the conversation unfolds.
+                  Recording… transcript will appear here once you stop.
                 </>
               ) : isLive ? (
                 <>
