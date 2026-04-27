@@ -9,10 +9,17 @@ const ALLOWED_ORIGINS = [
 ];
 const LOCALHOST_PATTERN = /^http:\/\/localhost(:\d+)?$/;
 
-// Routes that don't require auth
+// Routes that don't require auth.
+// - /api/health: liveness probe
+// - /api/stripe/webhook: signature-verified by Stripe SDK
+// - /api/calendar/google/callback: OAuth redirect target — comes from
+//   Google with a `state` nonce we verify in the route itself (see
+//   apps/api/src/lib/oauth-state.ts). Adding a Bearer requirement here
+//   would break every real OAuth flow (Google has no way to attach one).
 const PUBLIC_ROUTES = [
   "/api/health",
   "/api/stripe/webhook",
+  "/api/calendar/google/callback",
 ];
 
 function isPublicRoute(pathname: string): boolean {
