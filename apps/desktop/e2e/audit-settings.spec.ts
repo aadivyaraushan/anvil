@@ -107,4 +107,45 @@ test.describe("audit: settings & calendar OAuth", () => {
     const res = await request.get(`${apiBase}/api/calendar/google/connect`);
     expect(res.status()).toBe(401);
   });
+
+  test("G2d /calendar/google/callback with a forged state nonce is rejected", async ({
+    request,
+  }) => {
+    // Pre-PR-2 the callback trusted whatever was base64-encoded in
+    // `state`. PR 2 wired oauth_states (CSRF nonce table) so an
+    // attacker can no longer hand-craft a callback URL and have the
+    // tokens upserted under their target's account. This locks that in.
+    const res = await request.get(
+      `${apiBase}/api/calendar/google/callback?code=fake-code&state=bogus-nonce-not-issued`,
+      { maxRedirects: 0 },
+    );
+    expect(res.status()).toBe(400);
+    const body = (await res.json()) as { error?: string };
+    expect(body.error).toMatch(/invalid state/i);
+
+    // Confirm no calendar_connections row was written for the test user.
+    const conn = await getCalendarConnection(testUserId);
+    expect(conn).toBeNull();
+  });
+
+  test("G2d /calendar/google/connect mints a UUID nonce as state", async ({
+    request,
+  }) => {
+    const res = await request.get(
+      `${apiBase}/api/calendar/google/connect`,
+      { headers: { Authorization: `Bearer ${userToken}` } },
+    );
+    const { url } = (await res.json()) as { url: string };
+    const stateParam = new URL(url).searchParams.get("state");
+    // UUID v4 shape — pre-PR-2 this was a base64-encoded JSON blob
+    // containing the user's bearer token (which is exactly the leak
+    // we're fixing). Locking in that the new state is just a UUID.
+    expect(stateParam).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+    // Defense in depth: assert the state does NOT contain a base64-
+    // encoded JWT prefix ("eyJ" → '{"' base64-encoded), the shape of
+    // the old leaky blob.
+    expect(stateParam).not.toContain("eyJ");
+  });
 });
