@@ -104,6 +104,47 @@ test.describe("audit: interviews (free plan)", () => {
     expect(interviews[0].source).not.toBe("inperson");
   });
 
+  test("C4 delete interview — kebab menu removes the row", async ({
+    page,
+  }) => {
+    await page.goto(`/project/${projectId}`);
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // Seed one interview via UI.
+    await page
+      .getByRole("button", { name: /add conversation/i })
+      .first()
+      .click();
+    await page
+      .locator("input[placeholder*='Attendee name']")
+      .fill("Audit C4 to delete");
+    await page
+      .getByRole("button", { name: /^schedule conversation$/i })
+      .click();
+    await expect(page.getByText("Audit C4 to delete").first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    let interviews = await getInterviewsForProject(projectId);
+    expect(interviews).toHaveLength(1);
+    const interviewId = interviews[0].id;
+
+    // Hover to reveal the kebab, then open the dropdown. Auto-accept the
+    // browser confirm() since our delete handler uses window.confirm.
+    page.once("dialog", (d) => d.accept());
+    await page.getByTestId("interview-row-kebab").click();
+    await page.getByTestId("interview-row-delete").click();
+
+    // Row disappears from the inbox; DB row gone.
+    await expect(page.getByText("Audit C4 to delete")).toBeHidden({
+      timeout: 10_000,
+    });
+    interviews = await getInterviewsForProject(projectId);
+    expect(interviews.find((i) => i.id === interviewId)).toBeUndefined();
+  });
+
   test("C5 free-tier interview limit is enforced — 3rd attempt shows plan-limit banner", async ({
     page,
   }) => {

@@ -62,3 +62,33 @@ export async function PATCH(
   if (error) return Response.json({ error: error.message }, { status: 500 });
   return Response.json(data);
 }
+
+export async function DELETE(
+  req: NextRequest,
+  ctx: { params: Promise<{ id: string; interviewId: string }> },
+) {
+  const { interviewId } = await ctx.params;
+  const token = extractBearerToken(req.headers.get("authorization"));
+  if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  const supabase = createUserSupabaseClient(token);
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return Response.json({ error: "Unauthorized" }, { status: 401 });
+
+  // RLS scopes the delete to the caller's interviews. The recording
+  // file in Storage is left in place — auto-cleaning Storage is a
+  // separate flow (TODO: add a DB trigger or background job).
+  const { data: deleted, error } = await supabase
+    .from("interviews")
+    .delete()
+    .eq("id", interviewId)
+    .select("id");
+
+  if (error) return Response.json({ error: error.message }, { status: 500 });
+
+  if (!deleted || deleted.length === 0) {
+    return Response.json({ error: "Interview not found" }, { status: 404 });
+  }
+
+  return new Response(null, { status: 204 });
+}

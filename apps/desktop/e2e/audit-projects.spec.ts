@@ -82,6 +82,33 @@ test.describe("audit: projects (free plan)", () => {
     expect(row.idea_description).toBe("Edited idea");
   });
 
+  test("B3 delete project — danger zone destroys row + cascades children", async ({
+    page,
+  }) => {
+    await page.goto("/dashboard/new");
+    await page.locator("#name").fill("Audit B3 to delete");
+    await page.locator("#idea_description").fill("Delete me");
+    await page.getByRole("button", { name: /create project/i }).click();
+    await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    const projectId = page.url().match(/\/project\/([0-9a-f-]{36})$/)![1];
+
+    await page.goto(`/project/${projectId}/settings`);
+    await expect(page.getByTestId("delete-project-open")).toBeVisible({
+      timeout: 10_000,
+    });
+    await page.getByTestId("delete-project-open").click();
+
+    // Type-to-confirm — must match the project name exactly.
+    await page.getByTestId("delete-project-input").fill("Audit B3 to delete");
+    await expect(page.getByTestId("delete-project-submit")).toBeEnabled();
+    await page.getByTestId("delete-project-submit").click();
+
+    await page.waitForURL("/dashboard", { timeout: 15_000 });
+
+    const rows = await getProjectsForUser(testUserId);
+    expect(rows.find((r) => r.id === projectId)).toBeUndefined();
+  });
+
   test("B4 free-tier limit is enforced — 2nd create returns 422 + inline plan-limit banner", async ({
     page,
     request,

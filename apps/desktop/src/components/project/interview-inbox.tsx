@@ -3,14 +3,23 @@
 import { useRef, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Link as LinkIcon, ChevronLeft, MapPin, Video } from 'lucide-react'
-import { useInterviews } from '@/lib/hooks/use-interviews'
+import {
+  useCreateInterview,
+  useDeleteInterview,
+  useInterviews,
+} from '@/lib/hooks/use-interviews'
 import { useProject } from '@/lib/hooks/use-projects'
-import { useCreateInterview } from '@/lib/hooks/use-interviews'
 import type { Interview } from '@/lib/supabase/types'
 import { LiveDot } from './live-dot'
 import { SourceGlyph } from './source-glyph'
 import { ErrorCard } from '@/components/error-card'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 
 type ConversationMode = 'in_person' | 'online'
@@ -282,17 +291,19 @@ type InterviewRowProps = {
   interview: Interview
   isActive: boolean
   onClick: () => void
+  projectId: string
 }
 
-function InterviewRow({ interview, isActive, onClick }: InterviewRowProps) {
+function InterviewRow({ interview, isActive, onClick, projectId }: InterviewRowProps) {
   const isLive = interview.status === 'live'
   const timeStr = formatTime(interview.scheduled_at, interview.status)
+  const deleteInterview = useDeleteInterview()
 
   return (
     <div
       onClick={onClick}
       className={cn(
-        'px-[18px] py-2.5 flex gap-2.5 cursor-pointer transition-colors',
+        'group px-[18px] py-2.5 flex gap-2.5 cursor-pointer transition-colors',
         isActive ? 'bg-muted/50' : 'hover:bg-muted/20',
       )}
       style={{
@@ -341,6 +352,35 @@ function InterviewRow({ interview, isActive, onClick }: InterviewRowProps) {
         {isLive && <LiveDot size="sm" color="rose" />}
         {timeStr}
       </div>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          data-testid="interview-row-kebab"
+          aria-label="Conversation actions"
+          onClick={(e) => e.stopPropagation()}
+          className="shrink-0 opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 text-muted-foreground hover:text-foreground transition-opacity px-1 cursor-pointer"
+        >
+          ⋮
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+          <DropdownMenuItem
+            data-testid="interview-row-delete"
+            variant="destructive"
+            disabled={deleteInterview.isPending}
+            onClick={(e) => {
+              e.preventDefault()
+              if (
+                window.confirm(
+                  `Delete this conversation${interview.attendee_name ? ` with ${interview.attendee_name}` : ''}? This cannot be undone.`,
+                )
+              ) {
+                deleteInterview.mutate({ id: interview.id, projectId })
+              }
+            }}
+          >
+            Delete conversation
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   )
 }
@@ -443,6 +483,7 @@ export function InterviewInbox({
                   interview={interview}
                   isActive={interview.id === activeInterviewId}
                   onClick={() => onSelect(interview.id)}
+                  projectId={projectId}
                 />
               ))}
             </div>

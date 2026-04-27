@@ -1,7 +1,12 @@
 "use client";
 
 import { use, useState } from "react";
-import { useProject, useUpdateProject } from "@/lib/hooks/use-projects";
+import { useRouter } from "next/navigation";
+import {
+  useDeleteProject,
+  useProject,
+  useUpdateProject,
+} from "@/lib/hooks/use-projects";
 import { mapError } from "@/lib/errors";
 import { ErrorCard } from "@/components/error-card";
 import { Button } from "@/components/ui/button";
@@ -19,9 +24,13 @@ export default function ProjectSettingsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
   const { data: project, error, isLoading } = useProject(id);
   const updateProject = useUpdateProject();
+  const deleteProject = useDeleteProject();
   const [saved, setSaved] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState("");
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -113,6 +122,75 @@ export default function ProjectSettingsPage({
               <ErrorCard error={mapError(updateProject.error)} />
             )}
           </form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="text-destructive">Danger zone</CardTitle>
+          <CardDescription>
+            Deleting a project removes all conversations, transcripts, and
+            findings tied to it. This cannot be undone.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {!deleteOpen ? (
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid="delete-project-open"
+              onClick={() => setDeleteOpen(true)}
+            >
+              Delete project
+            </Button>
+          ) : (
+            <div className="grid gap-3" data-testid="delete-project-confirm">
+              <p className="text-sm text-muted-foreground">
+                Type{" "}
+                <span className="font-mono font-medium text-foreground">
+                  {project.name}
+                </span>{" "}
+                to confirm.
+              </p>
+              <Input
+                data-testid="delete-project-input"
+                value={deleteConfirm}
+                onChange={(e) => setDeleteConfirm(e.target.value)}
+                placeholder={project.name}
+              />
+              <div className="flex items-center gap-3">
+                <Button
+                  type="button"
+                  variant="destructive"
+                  data-testid="delete-project-submit"
+                  disabled={
+                    deleteConfirm !== project.name || deleteProject.isPending
+                  }
+                  onClick={async () => {
+                    await deleteProject.mutateAsync(id);
+                    router.push("/dashboard");
+                  }}
+                >
+                  {deleteProject.isPending
+                    ? "Deleting…"
+                    : "Permanently delete project"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => {
+                    setDeleteOpen(false);
+                    setDeleteConfirm("");
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+              {deleteProject.error && (
+                <ErrorCard error={mapError(deleteProject.error)} />
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

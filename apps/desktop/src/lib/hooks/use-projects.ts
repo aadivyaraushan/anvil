@@ -160,11 +160,21 @@ export function useDeleteProject() {
   return useMutation({
     mutationFn: async (id: string) => {
       const supabase = getSupabase();
-      const { error } = await supabase
-        .from("projects")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("NEXT_PUBLIC_API_URL is not set");
+
+      const res = await fetch(`${apiUrl}/api/projects/${id}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (!res.ok && res.status !== 204) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Project delete failed: ${res.status}`);
+      }
       return id;
     },
     onSuccess: (id) => {

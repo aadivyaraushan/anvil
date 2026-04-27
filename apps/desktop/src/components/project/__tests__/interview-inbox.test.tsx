@@ -10,6 +10,13 @@ vi.mock('@/lib/hooks/use-interviews', () => ({
     mutate: vi.fn(),
     isPending: false,
   })),
+  // PR 3 added a kebab menu on each interview row that calls
+  // useDeleteInterview. The mock needs to surface it so the inbox
+  // renders without "no export" errors during unit tests.
+  useDeleteInterview: vi.fn(() => ({
+    mutate: vi.fn(),
+    isPending: false,
+  })),
 }))
 
 vi.mock('@/lib/hooks/use-projects', () => ({

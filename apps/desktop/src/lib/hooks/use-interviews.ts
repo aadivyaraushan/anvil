@@ -203,13 +203,26 @@ export function useUpdateInterview() {
 export function useDeleteInterview() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id }: { id: string; projectId: string }) => {
+    mutationFn: async ({ id, projectId }: { id: string; projectId: string }) => {
       const supabase = getSupabase();
-      const { error } = await supabase
-        .from("interviews")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL;
+      if (!apiUrl) throw new Error("NEXT_PUBLIC_API_URL is not set");
+
+      const res = await fetch(
+        `${apiUrl}/api/projects/${projectId}/interviews/${id}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        },
+      );
+      if (!res.ok && res.status !== 204) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `Interview delete failed: ${res.status}`);
+      }
       return id;
     },
     onSuccess: (id, { projectId }) => {
