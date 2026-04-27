@@ -1,7 +1,44 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 let _adminClient: SupabaseClient | null = null;
 let _supportsRedesignSchema: boolean | null = null;
+
+/**
+ * Read the access_token from the storage state captured by auth.setup.ts.
+ * Audit specs use this for direct `request.post(...)` calls so they
+ * inherit the same session the browser tests use, instead of churning
+ * a fresh signInWithPassword (which on certain Supabase project
+ * configs revokes the storage-state session and breaks every later
+ * authenticated test in the run).
+ */
+export function readAuthTokenFromStorageState(): string {
+  const path = join(__dirname, "..", ".auth", "user.json");
+  const raw = readFileSync(path, "utf8");
+  const state = JSON.parse(raw) as {
+    origins?: Array<{
+      origin?: string;
+      localStorage?: Array<{ name: string; value: string }>;
+    }>;
+  };
+  for (const origin of state.origins ?? []) {
+    for (const item of origin.localStorage ?? []) {
+      if (item.name.endsWith("-auth-token")) {
+        try {
+          const session = JSON.parse(item.value) as { access_token?: string };
+          if (session.access_token) return session.access_token;
+        } catch {
+          // fall through
+        }
+      }
+    }
+  }
+  throw new Error(
+    "Could not extract access_token from e2e/.auth/user.json — has auth.setup.ts run?",
+  );
+}
 
 function adminClient(): SupabaseClient {
   if (_adminClient) return _adminClient;

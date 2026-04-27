@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import {
   cleanupProjectsForUser,
   getUserIdByEmail,
+  readAuthTokenFromStorageState,
   seedInterview,
   seedProject,
   upsertSubscription,
@@ -38,21 +39,12 @@ test.beforeAll(async () => {
   testUserId = id;
   await upsertSubscription({ userId: id, plan: "free" });
 
-  // Sign in once via Supabase client to grab a real bearer token —
-  // direct API calls in these tests skip the browser fixture.
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: process.env.E2E_TEST_EMAIL!,
-    password: process.env.E2E_TEST_PASSWORD!,
-  });
-  if (error || !data.session) {
-    throw new Error(`audit-analysis: could not sign in test user: ${error?.message}`);
-  }
-  userToken = data.session.access_token;
+  // Read the bearer token from the storage state captured by
+  // auth.setup.ts. Calling signInWithPassword here would mint a fresh
+  // session and (depending on Supabase project settings) revoke the
+  // storage-state session, breaking every later authenticated browser
+  // test in the run with "AuthApiError: refresh token revoked".
+  userToken = readAuthTokenFromStorageState();
 });
 
 test.afterEach(async () => {

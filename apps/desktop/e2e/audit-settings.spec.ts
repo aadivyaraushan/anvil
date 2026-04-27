@@ -4,6 +4,7 @@ import {
   cleanupProjectsForUser,
   getCalendarConnection,
   getUserIdByEmail,
+  readAuthTokenFromStorageState,
 } from "./helpers/db";
 
 /**
@@ -31,19 +32,8 @@ test.beforeAll(async () => {
   if (!id) throw new Error("E2E test user not found");
   testUserId = id;
 
-  const sb = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { auth: { persistSession: false } },
-  );
-  const { data, error } = await sb.auth.signInWithPassword({
-    email: process.env.E2E_TEST_EMAIL!,
-    password: process.env.E2E_TEST_PASSWORD!,
-  });
-  if (error || !data.session) {
-    throw new Error(`audit-settings: could not sign in: ${error?.message}`);
-  }
-  userToken = data.session.access_token;
+  // See audit-analysis.spec.ts beforeAll for why we don't sign in fresh.
+  userToken = readAuthTokenFromStorageState();
 });
 
 test.afterEach(async () => {

@@ -4,6 +4,7 @@ import {
   getProjectsForUser,
   getSubscription,
   getUserIdByEmail,
+  readAuthTokenFromStorageState,
   upsertSubscription,
 } from "./helpers/db";
 
@@ -150,19 +151,11 @@ test.describe("audit: projects (free plan)", () => {
 
     // Direct API probe: second POST returns 422 with the structured body.
     // (Done via request fixture so we can read the body without UI parsing.)
-    const sb2 = await import("@supabase/supabase-js");
-    const sbClient = sb2.createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { auth: { persistSession: false } },
-    );
-    const { data: signin } = await sbClient.auth.signInWithPassword({
-      email: process.env.E2E_TEST_EMAIL!,
-      password: process.env.E2E_TEST_PASSWORD!,
-    });
+    // Use the storage-state token rather than signInWithPassword — see
+    // audit-analysis.spec.ts beforeAll for the rationale.
     const apiBase = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001";
     const apiRes = await request.post(`${apiBase}/api/projects`, {
-      headers: { Authorization: `Bearer ${signin?.session?.access_token}` },
+      headers: { Authorization: `Bearer ${readAuthTokenFromStorageState()}` },
       data: { name: "Audit B4 third", idea_description: "x", target_profile: "" },
     });
     expect(apiRes.status()).toBe(422);

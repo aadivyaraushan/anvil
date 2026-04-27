@@ -72,9 +72,10 @@ test.describe("Empty states", () => {
     const runBtn = page.getByRole("button", { name: /run analysis/i });
     await expect(runBtn).toBeVisible({ timeout: 10_000 });
     await expect(runBtn).toBeDisabled();
+    // Copy was rebranded "interviews" → "conversations" in the UI.
     await expect(runBtn).toHaveAttribute(
       "title",
-      /Complete 2 interviews|Needs connection/i,
+      /Complete 2 (interviews|conversations)|Needs connection/i,
     );
   });
 });
