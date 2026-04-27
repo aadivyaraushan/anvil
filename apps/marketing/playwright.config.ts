@@ -19,9 +19,15 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "pnpm dlx serve out -p 3001",
+    // Build the static export, then serve `out/`. Combining both into
+    // one command means the test runner doesn't depend on a prior
+    // manual `pnpm build`. CI runs the same command — in dev,
+    // reuseExistingServer=true means a developer can `pnpm dev` and
+    // re-run tests against that.
+    command: "pnpm build && pnpm dlx serve out -p 3001",
     url: "http://localhost:3001",
     reuseExistingServer: !process.env.CI,
+    timeout: 180_000,
     stdout: "ignore",
     stderr: "pipe",
   },
