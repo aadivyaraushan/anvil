@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
   const attendee_name = formData.get("attendee_name") as string | null;
   const source = (formData.get("source") as string | null) ?? "uploaded";
   // When the recording was started from an existing conversation page,
-  // the capsule passes the interview_id back so we append to that row
-  // instead of inserting a brand-new conversation.
+  // the client passes the interview_id back so we append to that row instead
+  // of inserting a brand-new conversation.
   const interview_id = formData.get("interview_id") as string | null;
 
   if (!file || !project_id) {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     interview = { id: interview_id };
   } else {
-    // Insert-new path (used by the dashboard's quick-capture button).
+    // Insert-new path (used by direct upload/import callers).
     const { data: created, error: insertError } = await serviceSupabase
       .from("interviews")
       .insert({

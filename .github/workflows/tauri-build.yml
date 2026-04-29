@@ -49,7 +49,7 @@ jobs:
       - name: Build Tauri app (universal binary, unsigned)
         working-directory: apps/desktop
         run: |
-          pnpm dlx @tauri-apps/cli build --target universal-apple-darwin
+          pnpm exec tauri build --target universal-apple-darwin
 
       - name: Rename .dmg with tag/sha
         id: rename
@@ -67,3 +67,134 @@ jobs:
           path: ${{ steps.rename.outputs.path }}
           retention-days: ${{ inputs.tag && 90 || 7 }}
           if-no-files-found: error
+
+  # ── Tauri E2E (real WKWebView, mic, IPC) ──────────────────────────────────
+  # Runs on every PR so we catch Tauri/web divergence at review time. Splits
+  # from the unsigned-build job because (a) the e2e build uses --features e2e
+  # and a debug profile, which would change the artifact, and (b) we want the
+  # build job to keep emitting the prod-shaped DMG even if e2e flakes.
+  e2e-tauri:
+    name: Tauri E2E (macOS)
+    runs-on: macos-latest
+    # Skip when only docs/marketing changed — Tauri code is untouched.
+    # Note: paths-ignore at the workflow level would also skip the build job,
+    # so we gate per-job via a quick changed-files probe.
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Decide whether to run
+        id: changes
+        run: |
+          if git diff --name-only ${{ github.event.before || 'HEAD~1' }} HEAD 2>/dev/null \
+            | grep -qvE '^(apps/marketing/|.*\.md$|docs/)'; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - if: steps.changes.outputs.run != 'true'
+        run: echo "Only docs/marketing changed; skipping Tauri e2e."
+
+      - if: steps.changes.outputs.run == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - if: steps.changes.outputs.run == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - if: steps.changes.outputs.run == 'true'
+        uses: dtolnay/rust-toolchain@stable
+
+      - if: steps.changes.outputs.run == 'true'
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/desktop/src-tauri
+          key: e2e
+
+      - if: steps.changes.outputs.run == 'true'
+        run: pnpm install --frozen-lockfile=false
+
+      - if: steps.changes.outputs.run == 'true'
+        run: pnpm exec playwright install chromium
+
+      # Pre-grant microphone access. Bundle is unsigned (signingIdentity:
+      # null) so TCC accepts a direct insert. CI runners don't have a Keychain
+      # unlocked for full TCC manipulation, so we use the user-domain TCC.db
+      # only — that's enough for cpal mic capture because the unsigned binary
+      # is treated as a per-user entry.
+      - if: steps.changes.outputs.run == 'true'
+        name: Pre-grant TCC permissions for app.anvil.desktop
+        run: |
+          set -e
+          TCC_DB="$HOME/Library/Application Support/com.apple.TCC/TCC.db"
+          mkdir -p "$(dirname "$TCC_DB")"
+          # Initialise the user-domain TCC schema if it doesn't exist yet.
+          # Keep this idempotent — sqlite will error on duplicate inserts so
+          # we use INSERT OR REPLACE.
+          sqlite3 "$TCC_DB" <<'SQL'
+          CREATE TABLE IF NOT EXISTS access (
+            service TEXT, client TEXT, client_type INTEGER,
+            auth_value INTEGER, auth_reason INTEGER, auth_version INTEGER,
+            csreq BLOB, policy_id INTEGER, indirect_object_identifier_type INTEGER,
+            indirect_object_identifier TEXT, indirect_object_code_identity BLOB,
+            flags INTEGER, last_modified INTEGER,
+            PRIMARY KEY (service, client, client_type, indirect_object_identifier)
+          );
+          INSERT OR REPLACE INTO access
+            (service, client, client_type, auth_value, auth_reason, auth_version, last_modified)
+            VALUES ('kTCCServiceMicrophone', 'app.anvil.desktop', 0, 2, 0, 1, strftime('%s','now'));
+          SQL
+
+      # Spawn the dev servers in the background. The Tauri app boots inside
+      # global-setup.ts and points at ANVIL_E2E_DEV_URL → :3000.
+      - if: steps.changes.outputs.run == 'true'
+        name: Start desktop + api dev servers
+        env:
+          ANVIL_LLM_MODE: mock
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DEEPGRAM_API_KEY: ${{ secrets.DEEPGRAM_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          STRIPE_SECRET_KEY: ${{ secrets.STRIPE_SECRET_KEY }}
+        run: |
+          pnpm --filter desktop dev > /tmp/desktop-dev.log 2>&1 &
+          pnpm --filter api dev > /tmp/api-dev.log 2>&1 &
+          # Wait for both ports to come up.
+          for port in 3000 3001; do
+            for i in {1..60}; do
+              if curl -fsS "http://localhost:$port" >/dev/null 2>&1; then break; fi
+              sleep 2
+            done
+          done
+
+      - if: steps.changes.outputs.run == 'true'
+        name: Run Tauri E2E suite
+        env:
+          ANVIL_E2E_DEV_URL: http://localhost:3000
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          TAURI_E2E_VERBOSE: "1"
+        run: pnpm --filter desktop test:e2e:tauri
+
+      - if: failure() && steps.changes.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-e2e-traces-${{ github.sha }}
+          path: |
+            apps/desktop/playwright-report
+            apps/desktop/test-results
+            /tmp/desktop-dev.log
+            /tmp/api-dev.log
+          retention-days: 7
+          if-no-files-found: ignore

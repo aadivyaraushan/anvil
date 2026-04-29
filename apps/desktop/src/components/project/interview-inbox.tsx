@@ -20,6 +20,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 type ConversationMode = 'in_person' | 'online'
@@ -298,9 +306,11 @@ function InterviewRow({ interview, isActive, onClick, projectId }: InterviewRowP
   const isLive = interview.status === 'live'
   const timeStr = formatTime(interview.scheduled_at, interview.status)
   const deleteInterview = useDeleteInterview()
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   return (
     <div
+      data-testid={`interview-row-${interview.id}`}
       onClick={onClick}
       className={cn(
         'group px-[18px] py-2.5 flex gap-2.5 cursor-pointer transition-colors',
@@ -366,21 +376,55 @@ function InterviewRow({ interview, isActive, onClick, projectId }: InterviewRowP
             data-testid="interview-row-delete"
             variant="destructive"
             disabled={deleteInterview.isPending}
-            onClick={(e) => {
-              e.preventDefault()
-              if (
-                window.confirm(
-                  `Delete this conversation${interview.attendee_name ? ` with ${interview.attendee_name}` : ''}? This cannot be undone.`,
-                )
-              ) {
-                deleteInterview.mutate({ id: interview.id, projectId })
-              }
-            }}
+            onClick={() => setConfirmOpen(true)}
           >
             Delete conversation
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent
+          onClick={(e) => e.stopPropagation()}
+          data-testid="interview-row-delete-dialog"
+        >
+          <DialogHeader>
+            <DialogTitle>Delete conversation?</DialogTitle>
+            <DialogDescription>
+              This permanently removes
+              {interview.attendee_name
+                ? ` the conversation with ${interview.attendee_name}`
+                : ' this conversation'}
+              , its transcript, and any tagged findings. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleteInterview.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid="interview-row-delete-confirm"
+              disabled={deleteInterview.isPending}
+              onClick={() => {
+                deleteInterview.mutate(
+                  { id: interview.id, projectId },
+                  {
+                    onSuccess: () => setConfirmOpen(false),
+                  },
+                )
+              }}
+            >
+              {deleteInterview.isPending ? 'Deleting…' : 'Delete conversation'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -1,14 +1,31 @@
 "use client";
 
 import { useState } from "react";
-import { useProjects } from "@/lib/hooks/use-projects";
+import { useDeleteProject, useProjects } from "@/lib/hooks/use-projects";
 import { useUser } from "@/lib/hooks/use-auth";
 import { useQuery } from "@tanstack/react-query";
 import { getSupabase } from "@/lib/supabase/client";
 import { ErrorCard } from "@/components/error-card";
+import { mapError } from "@/lib/errors";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import type { Project, AnalystDocument, UserSettings } from "@/lib/supabase/types";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -33,12 +50,6 @@ function getProjectStatus(p: Project, interviews: { project_id: string; status: 
   if (projectInterviews.some((i) => i.status === "live")) return "live";
   if (projectInterviews.some((i) => isThisWeek(i.created_at) || (i.scheduled_at && isThisWeek(i.scheduled_at)))) return "active";
   return "idle";
-}
-
-function projectStatusDotColor(status: "live" | "active" | "idle") {
-  if (status === "live") return "bg-rose";
-  if (status === "active") return "bg-amber";
-  return "bg-muted-foreground";
 }
 
 function projectNote(
@@ -98,21 +109,6 @@ function StatSkeleton() {
 }
 
 // ---------------------------------------------------------------------------
-// Tauri helper
-// ---------------------------------------------------------------------------
-
-async function invokeTauri(cmd: string, args?: Record<string, unknown>) {
-  if (
-    typeof window !== "undefined" &&
-    ("__TAURI_INTERNALS__" in window || "__TAURI__" in window)
-  ) {
-    const { invoke } = await import("@tauri-apps/api/core");
-    return invoke(cmd, args);
-  }
-  return null;
-}
-
-// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -163,24 +159,6 @@ export default function DashboardPage() {
     enabled: Boolean(user),
   });
 
-  // Paste meeting link toggle state
-  const [showMeetingInput, setShowMeetingInput] = useState(false);
-  const [meetingLink, setMeetingLink] = useState("");
-  const [recordingToast, setRecordingToast] = useState<string | null>(null);
-
-  async function handleStartRecording() {
-    // The capsule owns the recording flow — it picks the project, invokes
-    // `start_recording`, and handles the upload. Dashboard just summons it.
-    // Clear any conversation-page handoff so a stale preselect from
-    // earlier doesn't make the capsule append to the wrong row.
-    try { window.localStorage.removeItem("anvil:capsule-preselect"); } catch {}
-    const result = await invokeTauri("show_capsule");
-    if (result === null) {
-      setRecordingToast("Tauri not available — run the desktop app to record.");
-      setTimeout(() => setRecordingToast(null), 3500);
-    }
-  }
-
   const interviews = allInterviews ?? [];
   const capturedThisWeek = interviews.filter((i) => isThisWeek(i.created_at)).length;
   const patternsEmerging = (analystDocs ?? []).reduce((sum, d) => sum + (d.unique_pattern_count ?? 0), 0);
@@ -210,10 +188,10 @@ export default function DashboardPage() {
     heroSub = "Live now — transcript updating.";
   } else if (upcomingInterviews.length > 0) {
     heroMain = `You have ${upcomingInterviews.length} upcoming conversation${upcomingInterviews.length !== 1 ? "s" : ""}.`;
-    heroSub = "Use the capture bar below to start recording.";
+    heroSub = "Open a conversation when you're ready to record.";
   } else {
     heroMain = "No conversations scheduled yet.";
-    heroSub = "Add a project or capture a conversation to get started.";
+    heroSub = "Add a project or conversation to get started.";
   }
 
   const firstProjectId = projects?.[0]?.id;
@@ -295,57 +273,6 @@ export default function DashboardPage() {
             )}
           </div>
 
-          {/* Quick-capture bar */}
-          <div className="mt-7 px-4 py-3.5 bg-card border border-border rounded-[10px] flex items-center gap-3">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" className="text-rose shrink-0" style={{ color: "var(--rose)" }}>
-              <rect x="9" y="2" width="6" height="13" rx="3" stroke="currentColor" strokeWidth="2"/>
-              <path d="M5 10a7 7 0 0014 0" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-              <line x1="12" y1="19" x2="12" y2="23" stroke="currentColor" strokeWidth="2" strokeLinecap="round"/>
-            </svg>
-            <div className="text-[13.5px] text-muted-foreground">Capture a conversation —</div>
-            <button
-              onClick={handleStartRecording}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-rose animate-pulse" style={{ background: "var(--rose)" }} />
-              Start recording
-            </button>
-            <span className="text-xs text-muted-foreground">or</span>
-            <button
-              onClick={() => setShowMeetingInput((v) => !v)}
-              className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium border border-border hover:bg-muted transition-colors"
-            >
-              Paste meeting link
-            </button>
-            <label className="inline-flex items-center px-3 py-1.5 rounded-md text-xs font-medium text-muted-foreground hover:bg-muted transition-colors cursor-pointer">
-              Upload file
-              <input type="file" className="sr-only" accept="audio/*,video/*" />
-            </label>
-            <span className="flex-1" />
-            <span className="anvil-mono text-[11px] text-muted-foreground">⌥⌘R anywhere</span>
-          </div>
-          {showMeetingInput && (
-            <div className="mt-2 flex gap-2">
-              <input
-                type="url"
-                value={meetingLink}
-                onChange={(e) => setMeetingLink(e.target.value)}
-                placeholder="https://meet.google.com/..."
-                className="flex-1 px-3 py-2 rounded-md border border-border bg-card text-sm focus:outline-none focus:ring-1 focus:ring-ring"
-                autoFocus
-              />
-              <button
-                onClick={() => { setShowMeetingInput(false); setMeetingLink(""); }}
-                className="px-3 py-2 rounded-md border border-border text-sm hover:bg-muted transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          )}
-          {recordingToast && (
-            <div className="mt-2 px-3 py-2 rounded-md bg-muted text-sm text-muted-foreground">{recordingToast}</div>
-          )}
-
           {/* Projects */}
           <div className="mt-11">
             <div className="anvil-caps mb-3.5">Projects</div>
@@ -381,46 +308,14 @@ export default function DashboardPage() {
                     (i) => i.status === "scheduled" && i.scheduled_at && new Date(i.scheduled_at) > new Date()
                   ).length;
                   return (
-                    <button
+                    <ProjectRow
                       key={p.id}
-                      onClick={() => router.push(`/project/${p.id}`)}
-                      className="flex items-center gap-[18px] px-1 py-5 border-t border-border hover:bg-muted/30 transition-colors text-left w-full group"
-                    >
-                      <span
-                        className={`w-2 h-2 rounded-full shrink-0 ${projectStatusDotColor(status)}`}
-                        style={{
-                          background:
-                            status === "live"
-                              ? "var(--rose)"
-                              : status === "active"
-                              ? "var(--amber)"
-                              : "var(--muted-foreground)",
-                        }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-[17px] font-medium tracking-title truncate">{p.name}</div>
-                        <div className="text-[12.5px] text-muted-foreground mt-0.5">{note}</div>
-                      </div>
-                      <div className="flex gap-6 text-xs text-muted-foreground shrink-0">
-                        <div>
-                          <span className="anvil-mono text-[13px] text-foreground">{projectInterviews.length}</span>{" "}
-                          interviews
-                        </div>
-                        <div>
-                          <span className="anvil-mono text-[13px] text-foreground">{upcomingCount}</span>{" "}
-                          upcoming
-                        </div>
-                      </div>
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
-                      >
-                        <path d="M6 3l5 5-5 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-                      </svg>
-                    </button>
+                      project={p}
+                      status={status}
+                      note={note}
+                      interviewCount={projectInterviews.length}
+                      upcomingCount={upcomingCount}
+                    />
                   );
                 })}
             </div>
@@ -428,5 +323,186 @@ export default function DashboardPage() {
         </div>
       </main>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Project row
+// ---------------------------------------------------------------------------
+
+type ProjectRowProps = {
+  project: Project;
+  status: "live" | "active" | "idle";
+  note: string;
+  interviewCount: number;
+  upcomingCount: number;
+};
+
+function ProjectRow({
+  project,
+  status,
+  note,
+  interviewCount,
+  upcomingCount,
+}: ProjectRowProps) {
+  const router = useRouter();
+  const deleteProject = useDeleteProject();
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [confirmText, setConfirmText] = useState("");
+
+  return (
+    <>
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={() => router.push(`/project/${project.id}`)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            router.push(`/project/${project.id}`);
+          }
+        }}
+        data-testid={`project-row-${project.id}`}
+        className="flex items-center gap-[18px] px-1 py-5 border-t border-border hover:bg-muted/30 transition-colors text-left w-full group cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-sm"
+      >
+        <span
+          className="w-2 h-2 rounded-full shrink-0"
+          style={{
+            background:
+              status === "live"
+                ? "var(--rose)"
+                : status === "active"
+                ? "var(--amber)"
+                : "var(--muted-foreground)",
+          }}
+        />
+        <div className="flex-1 min-w-0">
+          <div className="text-[17px] font-medium tracking-title truncate">
+            {project.name}
+          </div>
+          <div className="text-[12.5px] text-muted-foreground mt-0.5">{note}</div>
+        </div>
+        <div className="flex gap-6 text-xs text-muted-foreground shrink-0">
+          <div>
+            <span className="anvil-mono text-[13px] text-foreground">
+              {interviewCount}
+            </span>{" "}
+            interviews
+          </div>
+          <div>
+            <span className="anvil-mono text-[13px] text-foreground">
+              {upcomingCount}
+            </span>{" "}
+            upcoming
+          </div>
+        </div>
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            data-testid={`project-row-kebab-${project.id}`}
+            aria-label="Project actions"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            className="shrink-0 opacity-0 group-hover:opacity-100 data-[popup-open]:opacity-100 text-muted-foreground hover:text-foreground transition-opacity px-1 cursor-pointer"
+          >
+            ⋮
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+            <DropdownMenuItem
+              onClick={() => router.push(`/project/${project.id}/settings`)}
+            >
+              Project settings
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              data-testid={`project-row-delete-${project.id}`}
+              variant="destructive"
+              onClick={() => {
+                setConfirmText("");
+                setConfirmOpen(true);
+              }}
+            >
+              Delete project
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="none"
+          className="text-muted-foreground group-hover:text-foreground transition-colors shrink-0"
+        >
+          <path
+            d="M6 3l5 5-5 5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </div>
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent
+          onClick={(e) => e.stopPropagation()}
+          data-testid={`project-row-delete-dialog-${project.id}`}
+        >
+          <DialogHeader>
+            <DialogTitle>Delete project?</DialogTitle>
+            <DialogDescription>
+              This permanently removes the project, all of its conversations,
+              transcripts, and findings. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <p className="text-sm text-muted-foreground">
+              Type{" "}
+              <span className="font-mono font-medium text-foreground">
+                {project.name}
+              </span>{" "}
+              to confirm.
+            </p>
+            <Input
+              data-testid={`project-row-delete-input-${project.id}`}
+              value={confirmText}
+              onChange={(e) => setConfirmText(e.target.value)}
+              placeholder={project.name}
+              autoFocus
+            />
+          </div>
+          {deleteProject.error && (
+            <ErrorCard error={mapError(deleteProject.error)} />
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={() => setConfirmOpen(false)}
+              disabled={deleteProject.isPending}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              data-testid={`project-row-delete-confirm-${project.id}`}
+              disabled={
+                confirmText !== project.name || deleteProject.isPending
+              }
+              onClick={() => {
+                deleteProject.mutate(project.id, {
+                  onSuccess: () => {
+                    setConfirmOpen(false);
+                    setConfirmText("");
+                  },
+                });
+              }}
+            >
+              {deleteProject.isPending
+                ? "Deleting…"
+                : "Permanently delete project"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }

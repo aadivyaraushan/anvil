@@ -18,7 +18,7 @@ import {
 //     line with timestamp + speaker
 //   - upload_status='failed' → canvas does not crash; row remains
 //     interactive
-//   - capsule's POST to /api/interviews/upload sends the right multipart
+//   - conversation recording POST to /api/interviews/upload sends the right multipart
 //     shape (mocked endpoint)
 //   - Deepgram-shaped transcript (Speaker 0/1, ms timestamps) renders
 //     correctly after API write
@@ -187,8 +187,8 @@ test.describe("Transcript pipeline — large content perf", () => {
   });
 });
 
-test.describe("Capsule upload — POST shape contract", () => {
-  test("capsule POSTs the right multipart shape to /api/interviews/upload (mocked)", async ({
+test.describe("Conversation recording upload — POST shape contract", () => {
+  test("recording upload POSTs the right multipart shape to /api/interviews/upload (mocked)", async ({
     page,
   }) => {
     let captured: {
@@ -198,7 +198,8 @@ test.describe("Capsule upload — POST shape contract", () => {
       contentType: string | null;
     } | null = null;
 
-    // Stub the upload endpoint and capture the request the capsule sends.
+    // Stub the upload endpoint and capture the request the conversation
+    // recorder sends.
     await page.route(
       /\/api\/interviews\/upload$/,
       async (route) => {
@@ -217,14 +218,11 @@ test.describe("Capsule upload — POST shape contract", () => {
       },
     );
 
-    await page.goto("/capsule");
+    await page.goto("/dashboard");
 
-    // The capsule's actual recording flow needs Tauri (the start /
-    // stop / fs.readFile chain). We can't drive it from headless Chrome.
-    // What we CAN verify is that the page loaded with the upload
-    // endpoint reachable, and that the Auth/header wiring in the page
-    // is what the API expects. Trigger a synthetic POST from the page
-    // context using the same client-side helpers.
+    // The actual recording flow needs microphone permission and either
+    // MediaRecorder or Tauri native capture. Here we pin the upload contract:
+    // multipart body, bearer token, and /api/interviews/upload destination.
     const result = await page.evaluate(async (apiUrl) => {
       const fd = new FormData();
       fd.append(

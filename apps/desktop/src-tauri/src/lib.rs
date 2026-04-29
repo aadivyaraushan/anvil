@@ -4,7 +4,19 @@ use audio::AudioController;
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{AppHandle, Emitter, Listener, Manager, State};
+use tauri::{AppHandle, Emitter, Listener, Manager, State, Url};
+
+// Tracks whether the system tray currently shows the recording or idle icon.
+// Owned via Mutex so the e2e `__test_get_tray_state` command can read it.
+#[derive(Default)]
+struct TrayState {
+    is_recording_icon: Mutex<bool>,
+}
+
+#[derive(Default)]
+struct DeepLinkState {
+    last_url: Mutex<Option<String>>,
+}
 
 // ─── Recording state ─────────────────────────────────────────────────────────
 
@@ -129,24 +141,6 @@ fn get_recording_state(state: State<Arc<AppState>>) -> RecordingState {
     s
 }
 
-#[tauri::command]
-fn show_capsule(app: AppHandle) -> Result<(), String> {
-    let capsule = app
-        .get_webview_window("capsule")
-        .ok_or("no capsule window")?;
-    capsule.show().map_err(|e| e.to_string())?;
-    capsule.set_focus().map_err(|e| e.to_string())?;
-    Ok(())
-}
-
-#[tauri::command]
-fn hide_capsule(app: AppHandle) -> Result<(), String> {
-    let capsule = app
-        .get_webview_window("capsule")
-        .ok_or("no capsule window")?;
-    capsule.hide().map_err(|e| e.to_string())
-}
-
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 fn uuid_v4() -> String {
@@ -170,6 +164,45 @@ fn update_tray_icon(app: &AppHandle, recording: bool) {
             tray.set_icon(Some(icon)).ok();
         }
     }
+    // Mirror the icon state into TrayState so e2e tests can assert without
+    // hashing the icon bytes (resource lookup races on first-run macOS).
+    if let Some(state) = app.try_state::<Arc<TrayState>>() {
+        if let Ok(mut flag) = state.is_recording_icon.lock() {
+            *flag = recording;
+        }
+    }
+}
+
+fn forward_deep_link(app: &AppHandle, payload: String) -> Result<(), tauri::Error> {
+    if let Some(state) = app.try_state::<Arc<DeepLinkState>>() {
+        if let Ok(mut last_url) = state.last_url.lock() {
+            *last_url = Some(payload.clone());
+        }
+    }
+    if let Some(window) = app.get_webview_window("main") {
+        window.emit("deep-link", payload)
+    } else {
+        app.emit("deep-link", payload)
+    }
+}
+
+/// Optional e2e-only override of the bundled webview URLs. When
+/// `ANVIL_E2E_DEV_URL` is set (e.g. `http://localhost:3000`), navigate the main
+/// window to that origin instead of `https://app.anvil-dev.com`.
+/// No-op when the env var is unset, so production binaries are unaffected.
+fn maybe_override_webview_urls(app: &AppHandle) {
+    let Ok(base) = std::env::var("ANVIL_E2E_DEV_URL") else {
+        return;
+    };
+    let base = base.trim_end_matches('/');
+    for (label, path) in [("main", "/dashboard")] {
+        let url = format!("{base}{path}");
+        if let (Some(window), Ok(parsed)) = (app.get_webview_window(label), Url::parse(&url)) {
+            if let Err(e) = window.navigate(parsed) {
+                eprintln!("[e2e] navigate {label} → {url} failed: {e}");
+            }
+        }
+    }
 }
 
 // ─── App entry point ──────────────────────────────────────────────────────────
@@ -181,34 +214,28 @@ pub fn run() {
         started_at: Mutex::new(None),
         audio: AudioController::new(),
     });
+    let tray_state = Arc::new(TrayState::default());
+    let deep_link_state = Arc::new(DeepLinkState::default());
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(app_state)
+        .manage(tray_state)
+        .manage(deep_link_state)
         .plugin(tauri_plugin_deep_link::init())
-        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_log::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::new().build())
-        .plugin(tauri_plugin_fs::init())
-        .setup(|app| {
-            // Register ⌥⌘R global shortcut → show capsule
-            use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
-            app.global_shortcut().on_shortcut("Alt+Super+R", {
-                let handle = app.handle().clone();
-                move |_app, _shortcut, event| {
-                    if event.state == ShortcutState::Pressed {
-                        if let Some(w) = handle.get_webview_window("capsule") {
-                            w.show().ok();
-                            w.set_focus().ok();
-                        }
-                    }
-                }
-            })?;
+        .plugin(tauri_plugin_fs::init());
 
+    #[cfg(feature = "e2e")]
+    let builder = builder.plugin(tauri_plugin_playwright::init());
+
+    builder
+        .setup(|app| {
             // Forward anvil:// deep links to the main window as an event.
             app.listen("deep-link://new-url", {
                 let handle = app.handle().clone();
                 move |event| {
-                    handle.emit("deep-link", event.payload()).ok();
+                    forward_deep_link(&handle, event.payload().to_string()).ok();
                 }
             });
 
@@ -218,17 +245,58 @@ pub fn run() {
                 .build(app)?;
             drop(tray);
 
+            // Redirect the prod webviews at a local dev server when running
+            // under e2e (gated by env var, not feature flag — even a non-e2e
+            // build can be steered to a staging origin if useful).
+            maybe_override_webview_urls(app.handle());
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             start_recording,
             stop_recording,
             get_recording_state,
-            show_capsule,
-            hide_capsule,
+            #[cfg(feature = "e2e")]
+            test_commands::__test_get_tray_state,
+            #[cfg(feature = "e2e")]
+            test_commands::__test_dispatch_deep_link,
+            #[cfg(feature = "e2e")]
+            test_commands::__test_get_last_deep_link,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Anvil");
+}
+
+// ─── Test-only IPC commands (compiled out of production binaries) ────────────
+
+#[cfg(feature = "e2e")]
+mod test_commands {
+    use super::{forward_deep_link, DeepLinkState, TrayState};
+    use std::sync::Arc;
+    use tauri::{AppHandle, State};
+
+    /// Returns "recording" or "idle" so the tray spec can assert state without
+    /// reading the rendered icon image off the macOS menu bar.
+    #[tauri::command]
+    pub fn __test_get_tray_state(state: State<Arc<TrayState>>) -> String {
+        match state.is_recording_icon.lock() {
+            Ok(g) if *g => "recording".to_string(),
+            _ => "idle".to_string(),
+        }
+    }
+
+    /// Emits the same internal event tauri-plugin-deep-link uses. This keeps
+    /// the e2e spec focused on our app-level forwarding logic without relying
+    /// on whichever installed app macOS LaunchServices picked for anvil://.
+    #[tauri::command]
+    pub fn __test_dispatch_deep_link(app: AppHandle, url: String) -> Result<(), String> {
+        forward_deep_link(&app, url).map_err(|e| e.to_string())
+    }
+
+    #[tauri::command]
+    pub fn __test_get_last_deep_link(state: State<Arc<DeepLinkState>>) -> Option<String> {
+        state.last_url.lock().ok().and_then(|url| url.clone())
+    }
 }
 
 // ─── Tests ────────────────────────────────────────────────────────────────────
