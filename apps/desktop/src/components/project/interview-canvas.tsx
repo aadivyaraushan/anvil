@@ -43,6 +43,12 @@ function isUrl(value: string | null): boolean {
   return /^https?:\/\//i.test(value.trim())
 }
 
+function errorMessage(error: unknown): string | null {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return null
+}
+
 function WaveformBars({ phase }: { phase: number }) {
   return (
     <div className="flex items-center gap-px h-4">
@@ -155,8 +161,9 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
         setIsRecording(true)
       } catch (e) {
         recordingInterviewRef.current = null
+        const detail = errorMessage(e)
         setRecordingError(
-          e instanceof Error ? `Could not start recording - ${e.message}.` : 'Could not start recording. Please try again.',
+          detail ? `Could not start recording - ${detail}.` : 'Could not start recording. Please try again.',
         )
         console.error('[canvas] native recording start failed:', e)
       }
@@ -210,7 +217,14 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
           return
         }
 
-        const bytes = await readFileBytes(filePath)
+        let bytes: Uint8Array | null
+        try {
+          bytes = await readFileBytes(filePath)
+        } catch (e) {
+          console.error('[canvas] native recording file read failed:', e)
+          setRecordingError('Could not read recording file.')
+          return
+        }
         if (!bytes) {
           setRecordingError('Could not read recording file.')
           return
@@ -232,8 +246,9 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
         nativeRecordingIdRef.current = null
         setIsRecording(false)
         recordingInterviewRef.current = null
+        const detail = errorMessage(e)
         setRecordingError(
-          e instanceof Error ? `Upload failed — ${e.message}. Please try again.` : 'Upload failed. Please try again.',
+          detail ? `Upload failed — ${detail}. Please try again.` : 'Upload failed. Please try again.',
         )
         console.error('[canvas] native recording failed:', e)
       } finally {
@@ -279,8 +294,9 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
         capturedInterview,
       })
     } catch (e) {
+      const detail = errorMessage(e)
       setRecordingError(
-        e instanceof Error ? `Upload failed — ${e.message}. Please try again.` : 'Upload failed. Please try again.',
+        detail ? `Upload failed — ${detail}. Please try again.` : 'Upload failed. Please try again.',
       )
       console.error('[canvas] upload failed:', e)
     } finally {

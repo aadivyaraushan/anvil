@@ -182,10 +182,32 @@ jobs:
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          E2E_TEST_EMAIL: ${{ secrets.E2E_TEST_EMAIL }}
-          E2E_TEST_PASSWORD: ${{ secrets.E2E_TEST_PASSWORD }}
+          E2E_TEST_EMAIL: ${{ secrets.TAURI_E2E_TEST_EMAIL || secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.TAURI_E2E_TEST_PASSWORD || secrets.E2E_TEST_PASSWORD }}
           TAURI_E2E_VERBOSE: "1"
         run: pnpm --filter desktop test:e2e:tauri
+
+      - if: steps.changes.outputs.run == 'true'
+        name: Run built-app Tauri E2E smoke suite
+        env:
+          ANVIL_E2E_DEV_URL: http://localhost:3000
+          NEXT_PUBLIC_API_URL: http://localhost:3001
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          E2E_TEST_EMAIL: ${{ secrets.TAURI_E2E_TEST_EMAIL || secrets.E2E_TEST_EMAIL }}
+          E2E_TEST_PASSWORD: ${{ secrets.TAURI_E2E_TEST_PASSWORD || secrets.E2E_TEST_PASSWORD }}
+          TAURI_E2E_VERBOSE: "1"
+        run: pnpm --filter desktop test:e2e:tauri:built
+
+      - if: steps.changes.outputs.run == 'true'
+        name: Build production Tauri app for e2e symbol gate
+        working-directory: apps/desktop
+        run: pnpm exec tauri build
+
+      - if: steps.changes.outputs.run == 'true'
+        name: Verify e2e commands are absent from production binary
+        run: pnpm --filter desktop check:tauri:e2e-symbols
 
       - if: failure() && steps.changes.outputs.run == 'true'
         uses: actions/upload-artifact@v4
@@ -196,5 +218,7 @@ jobs:
             apps/desktop/test-results
             /tmp/desktop-dev.log
             /tmp/api-dev.log
+            apps/desktop/src-tauri/target/**/debug/bundle/macos/Anvil.app/Contents/Resources/logs
+            apps/desktop/src-tauri/target/**/release/bundle/macos/Anvil.app/Contents/Resources/logs
           retention-days: 7
           if-no-files-found: ignore

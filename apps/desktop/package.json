@@ -13,6 +13,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:tauri": "playwright test --config=e2e-tauri/playwright-tauri.config.ts",
+    "test:e2e:tauri:built": "pnpm tauri:build:e2e && TAURI_E2E_LAUNCH_MODE=built playwright test --config=e2e-tauri/playwright-tauri.config.ts --grep @built",
+    "check:tauri:e2e-symbols": "node scripts/check-tauri-e2e-symbols.mjs",
     "tauri": "tauri",
     "tauri:dev:e2e": "tauri dev --features e2e",
     "tauri:build:e2e": "tauri build --debug --features e2e"

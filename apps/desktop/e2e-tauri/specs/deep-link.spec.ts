@@ -8,7 +8,7 @@ test.beforeEach(async ({ tauriPage }) => {
 // Verifies the app-level deep-link forwarding path without asking macOS
 // LaunchServices which installed Anvil build owns anvil:// on this machine.
 
-test("anvil:// deep link reaches the main window as a `deep-link` event", async ({
+test("@built anvil:// deep link reaches the main window as a `deep-link` event", async ({
   tauriPage,
 }) => {
   const url = `anvil://project/abc?spec=tauri-e2e`;

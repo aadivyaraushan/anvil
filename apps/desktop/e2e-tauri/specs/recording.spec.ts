@@ -6,8 +6,9 @@ import {
   cleanupProjectsForUser,
   getInterviewsForProject,
 } from "../helpers/db";
-import { clickSelector, visibleText } from "../helpers/dom";
+import { clickSelector, existsSelector, visibleText, waitForSelector } from "../helpers/dom";
 import { invoke } from "../helpers/ipc";
+import { readTrayState } from "../helpers/tray";
 
 // The headline test the harness was built for: the real WKWebView starts a
 // recording from the conversation page, Rust captures a WAV via cpal, and the
@@ -36,7 +37,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
     await restoreAuth(tauriPage);
   });
 
-  test("recording starts only from a conversation page, not dashboard/capsule", async ({
+  test("@built recording starts only from a conversation page, not dashboard/capsule", async ({
     tauriPage,
   }) => {
     const devUrl = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
@@ -53,18 +54,17 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
 
     await tauriPage.goto(`${devUrl}/project/${projectId}`);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
-    await expect
-      .poll(
-        () =>
-          tauriPage.evaluate<boolean>(
-            `(() => !!document.querySelector('[data-testid="start-recording-button"]'))()`
-          ),
-        { timeout: 15_000 }
-      )
-      .toBe(true);
+    await waitForSelector(tauriPage, '[data-testid="start-recording-button"]');
   });
 
-  test("conversation page Start recording to Stop writes recording_path on the existing row", async ({
+  test("@built only the main native window exists after capsule removal", async ({
+    tauriPage,
+  }) => {
+    const labels = await invoke<string[]>(tauriPage, "__test_get_window_labels");
+    expect(labels).toEqual(["main"]);
+  });
+
+  test("@built conversation page Start recording to Stop writes recording_path on the existing row", async ({
     tauriPage,
   }) => {
     await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
@@ -92,6 +92,79 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
     );
     expect(row?.recording_path).toContain(`/${projectId}/${interviewId}/`);
     expect(await getInterviewsForProject(projectId)).toHaveLength(1);
+  });
+
+  test("stopping after navigating away still uploads onto the conversation that started recording", async ({
+    tauriPage,
+  }) => {
+    const secondInterviewId = await seedInterview({
+      projectId,
+      attendeeName: "Navigation Target",
+      source: "inperson",
+    });
+
+    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+
+    await clickSelector(tauriPage, `[data-testid="interview-row-${secondInterviewId}"]`);
+    await waitForSelector(tauriPage, '[data-testid="stop-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_000));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+
+    await expect
+      .poll(
+        async () => {
+          const rows = await getInterviewsForProject(projectId);
+          return rows.find((row) => row.id === interviewId)?.recording_path ?? null;
+        },
+        { timeout: 30_000, message: "recording_path never appeared on original interview" }
+      )
+      .toMatch(/\.wav$/);
+
+    const rows = await getInterviewsForProject(projectId);
+    expect(rows.find((row) => row.id === interviewId)?.recording_path).toContain(
+      `/${projectId}/${interviewId}/`
+    );
+    expect(rows.find((row) => row.id === secondInterviewId)?.recording_path).toBeNull();
+    expect(rows).toHaveLength(2);
+  });
+
+  test("two sequential recordings attach to their own conversation rows", async ({
+    tauriPage,
+  }) => {
+    const secondInterviewId = await seedInterview({
+      projectId,
+      attendeeName: "Second Recording",
+      source: "inperson",
+    });
+
+    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+
+    for (const id of [interviewId, secondInterviewId]) {
+      await clickSelector(tauriPage, `[data-testid="interview-row-${id}"]`);
+      await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+      await new Promise((r) => setTimeout(r, 1_000));
+      await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+      await expect
+        .poll(
+          async () => {
+            const rows = await getInterviewsForProject(projectId);
+            return rows.find((row) => row.id === id)?.recording_path ?? null;
+          },
+          { timeout: 30_000, message: `recording_path never appeared on ${id}` }
+        )
+        .toMatch(/\.wav$/);
+    }
+
+    const rows = await getInterviewsForProject(projectId);
+    expect(rows.find((row) => row.id === interviewId)?.recording_path).toContain(
+      `/${projectId}/${interviewId}/`
+    );
+    expect(rows.find((row) => row.id === secondInterviewId)?.recording_path).toContain(
+      `/${projectId}/${secondInterviewId}/`
+    );
+    expect(rows).toHaveLength(2);
   });
 
   test("native recording IPC rejects duplicate starts and mismatched stops", async ({
@@ -128,6 +201,106 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
     await expect
       .poll(() => invoke<{ is_recording: boolean }>(tauriPage, "get_recording_state"))
       .toMatchObject({ is_recording: false });
+  });
+
+  test("forced microphone start failure leaves UI recoverable and tray idle", async ({
+    tauriPage,
+  }) => {
+    await invoke(tauriPage, "__test_fail_next_recording_start", {
+      message: "forced mic failure",
+    });
+
+    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+
+    await expect.poll(() => visibleText(tauriPage)).toContain("forced mic failure");
+    await expect.poll(() => existsSelector(tauriPage, '[data-testid="start-recording-button"]')).toBe(true);
+    await expect
+      .poll(() => invoke<{ is_recording: boolean }>(tauriPage, "get_recording_state"))
+      .toMatchObject({ is_recording: false });
+    await expect.poll(() => readTrayState(tauriPage)).toBe("idle");
+
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_000));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+    await expect
+      .poll(async () => (await getInterviewsForProject(projectId))[0]?.recording_path ?? null, {
+        timeout: 30_000,
+      })
+      .toMatch(/\.wav$/);
+  });
+
+  test("missing stopped file surfaces an error, resets native state, and permits retry", async ({
+    tauriPage,
+  }) => {
+    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
+    await invoke(tauriPage, "__test_make_next_stop_return_missing_file");
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_000));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+
+    await expect.poll(() => visibleText(tauriPage)).toContain("Could not read recording file");
+    await expect
+      .poll(() => invoke<{ is_recording: boolean }>(tauriPage, "get_recording_state"))
+      .toMatchObject({ is_recording: false });
+    await expect.poll(() => readTrayState(tauriPage)).toBe("idle");
+    expect((await getInterviewsForProject(projectId))[0]?.recording_path).toBeNull();
+
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_000));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+    await expect
+      .poll(async () => (await getInterviewsForProject(projectId))[0]?.recording_path ?? null, {
+        timeout: 30_000,
+      })
+      .toMatch(/\.wav$/);
+  });
+
+  test("upload API failure does not create a second row and permits retry", async ({
+    tauriPage,
+  }) => {
+    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
+    await tauriPage.evaluate(
+      `(() => {
+         const originalFetch = window.fetch.bind(window);
+         let failed = false;
+         window.fetch = async (...args) => {
+           const input = args[0];
+           const url = typeof input === 'string' ? input : input instanceof Request ? input.url : String(input);
+           if (!failed && url.includes('/api/interviews/upload')) {
+             failed = true;
+             return new Response(JSON.stringify({
+               error: 'forced upload failure',
+               stage: 'e2e',
+               detail: 'forced upload failure',
+             }), { status: 500, headers: { 'content-type': 'application/json' } });
+           }
+           return originalFetch(...args);
+         };
+       })()`
+    );
+
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_000));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+
+    await expect.poll(() => visibleText(tauriPage)).toContain("forced upload failure");
+    await expect.poll(() => readTrayState(tauriPage)).toBe("idle");
+    expect(await getInterviewsForProject(projectId)).toHaveLength(1);
+    expect((await getInterviewsForProject(projectId))[0]?.recording_path).toBeNull();
+
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_000));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+    await expect
+      .poll(async () => (await getInterviewsForProject(projectId))[0]?.recording_path ?? null, {
+        timeout: 30_000,
+      })
+      .toMatch(/\.wav$/);
+    expect(await getInterviewsForProject(projectId)).toHaveLength(1);
   });
 
   test.afterAll(async () => {

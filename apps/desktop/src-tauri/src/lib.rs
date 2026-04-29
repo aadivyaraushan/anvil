@@ -18,6 +18,13 @@ struct DeepLinkState {
     last_url: Mutex<Option<String>>,
 }
 
+#[cfg(feature = "e2e")]
+#[derive(Default)]
+struct TestFaultState {
+    next_start_error: Mutex<Option<String>>,
+    next_stop_missing_file: Mutex<bool>,
+}
+
 // ─── Recording state ─────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -45,6 +52,8 @@ struct AppState {
     recording: Mutex<RecordingState>,
     started_at: Mutex<Option<Instant>>,
     audio: AudioController,
+    #[cfg(feature = "e2e")]
+    faults: Arc<TestFaultState>,
 }
 
 // ─── Tauri commands ───────────────────────────────────────────────────────────
@@ -61,6 +70,17 @@ fn start_recording(
     let mut rec = state.recording.lock().map_err(|e| e.to_string())?;
     if rec.is_recording {
         return Err("Already recording".into());
+    }
+
+    #[cfg(feature = "e2e")]
+    if let Some(message) = state
+        .faults
+        .next_start_error
+        .lock()
+        .map_err(|e| e.to_string())?
+        .take()
+    {
+        return Err(message);
     }
 
     let recording_id = uuid_v4();
@@ -123,6 +143,21 @@ fn stop_recording(
 
     app.emit("recording-stopped", &*rec).ok();
     update_tray_icon(&app, false);
+
+    #[cfg(feature = "e2e")]
+    if *state
+        .faults
+        .next_stop_missing_file
+        .lock()
+        .map_err(|e| e.to_string())?
+    {
+        *state
+            .faults
+            .next_stop_missing_file
+            .lock()
+            .map_err(|e| e.to_string())? = false;
+        let _ = std::fs::remove_file(&path);
+    }
 
     Ok(path.to_string_lossy().to_string())
 }
@@ -213,6 +248,8 @@ pub fn run() {
         recording: Mutex::new(RecordingState::default()),
         started_at: Mutex::new(None),
         audio: AudioController::new(),
+        #[cfg(feature = "e2e")]
+        faults: Arc::new(TestFaultState::default()),
     });
     let tray_state = Arc::new(TrayState::default());
     let deep_link_state = Arc::new(DeepLinkState::default());
@@ -262,6 +299,12 @@ pub fn run() {
             test_commands::__test_dispatch_deep_link,
             #[cfg(feature = "e2e")]
             test_commands::__test_get_last_deep_link,
+            #[cfg(feature = "e2e")]
+            test_commands::__test_fail_next_recording_start,
+            #[cfg(feature = "e2e")]
+            test_commands::__test_make_next_stop_return_missing_file,
+            #[cfg(feature = "e2e")]
+            test_commands::__test_get_window_labels,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Anvil");
@@ -271,9 +314,9 @@ pub fn run() {
 
 #[cfg(feature = "e2e")]
 mod test_commands {
-    use super::{forward_deep_link, DeepLinkState, TrayState};
+    use super::{forward_deep_link, AppState, DeepLinkState, TrayState};
     use std::sync::Arc;
-    use tauri::{AppHandle, State};
+    use tauri::{AppHandle, Manager, State};
 
     /// Returns "recording" or "idle" so the tray spec can assert state without
     /// reading the rendered icon image off the macOS menu bar.
@@ -296,6 +339,38 @@ mod test_commands {
     #[tauri::command]
     pub fn __test_get_last_deep_link(state: State<Arc<DeepLinkState>>) -> Option<String> {
         state.last_url.lock().ok().and_then(|url| url.clone())
+    }
+
+    #[tauri::command]
+    pub fn __test_fail_next_recording_start(
+        state: State<Arc<AppState>>,
+        message: String,
+    ) -> Result<(), String> {
+        *state
+            .faults
+            .next_start_error
+            .lock()
+            .map_err(|e| e.to_string())? = Some(message);
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub fn __test_make_next_stop_return_missing_file(
+        state: State<Arc<AppState>>,
+    ) -> Result<(), String> {
+        *state
+            .faults
+            .next_stop_missing_file
+            .lock()
+            .map_err(|e| e.to_string())? = true;
+        Ok(())
+    }
+
+    #[tauri::command]
+    pub fn __test_get_window_labels(app: AppHandle) -> Vec<String> {
+        let mut labels = app.webview_windows().keys().cloned().collect::<Vec<_>>();
+        labels.sort();
+        labels
     }
 }
 

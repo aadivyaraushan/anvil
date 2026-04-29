@@ -34,7 +34,13 @@ export async function restoreAuth(tauriPage: TauriPage): Promise<void> {
   // localStorage is per-origin — land on the dev origin before writing keys.
   await tauriPage.goto(DEV_URL);
   await tauriPage.evaluate(
-    `(() => {
+    `(async () => {
+       localStorage.clear();
+       sessionStorage.clear();
+       await new Promise((resolve) => {
+         const request = indexedDB.deleteDatabase('keyval-store');
+         request.onsuccess = request.onerror = request.onblocked = () => resolve(null);
+       });
        const entries = ${JSON.stringify(snapshot.localStorage)};
        for (const [k, v] of Object.entries(entries)) {
          try { localStorage.setItem(k, v); } catch {}
