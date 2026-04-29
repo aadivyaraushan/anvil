@@ -85,6 +85,7 @@ export interface InterviewRow {
   id: string;
   project_id: string;
   created_at: string;
+  status: string | null;
   recording_path: string | null;
   duration_seconds: number | null;
   upload_status: string | null;
@@ -95,7 +96,7 @@ export async function getInterviewsForProject(
 ): Promise<InterviewRow[]> {
   const { data, error } = await client()
     .from("interviews")
-    .select("id, project_id, created_at, recording_path, duration_seconds, upload_status")
+    .select("id, project_id, created_at, status, recording_path, duration_seconds, upload_status")
     .eq("project_id", projectId);
   if (error) throw new Error(`getInterviewsForProject: ${error.message}`);
   return (data ?? []) as InterviewRow[];

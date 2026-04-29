@@ -48,6 +48,32 @@ test.describe("tray icon state", () => {
       .toBe("idle");
   });
 
+  test("tray stays recording after a rejected stop and resets after the real stop", async ({
+    tauriPage,
+  }) => {
+    await expect.poll(() => readTrayState(tauriPage)).toBe("idle");
+
+    const recordingId = await invoke<string>(tauriPage, "start_recording", {
+      projectId,
+      attendeeName: "Tray Mismatch E2E",
+    });
+    await expect
+      .poll(() => readTrayState(tauriPage), { timeout: 5_000 })
+      .toBe("recording");
+
+    await expect(
+      invoke(tauriPage, "stop_recording", { recordingId: "wrong-id" })
+    ).rejects.toThrow(/Recording ID mismatch/);
+    await expect
+      .poll(() => readTrayState(tauriPage), { timeout: 5_000 })
+      .toBe("recording");
+
+    await invoke(tauriPage, "stop_recording", { recordingId });
+    await expect
+      .poll(() => readTrayState(tauriPage), { timeout: 5_000 })
+      .toBe("idle");
+  });
+
   test.afterAll(async () => {
     await cleanupProjectsForUser(userId);
   });
