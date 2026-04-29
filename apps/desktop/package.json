@@ -17,7 +17,7 @@
     "check:tauri:e2e-symbols": "node scripts/check-tauri-e2e-symbols.mjs",
     "tauri": "tauri",
     "tauri:dev:e2e": "tauri dev --features e2e",
-    "tauri:build:e2e": "tauri build --debug --features e2e"
+    "tauri:build:e2e": "tauri build --debug --features e2e --bundles app"
   },
   "dependencies": {
     "@base-ui/react": "^1.3.0",

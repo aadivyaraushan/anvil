@@ -26,7 +26,7 @@ test("@built anvil:// deep link reaches the main window as a `deep-link` event",
   expect(payload).toContain("spec=tauri-e2e");
 });
 
-test("latest deep link replaces the previous forwarded URL", async ({
+test("@built latest deep link replaces the previous forwarded URL", async ({
   tauriPage,
 }) => {
   await invoke(tauriPage, "__test_dispatch_deep_link", {

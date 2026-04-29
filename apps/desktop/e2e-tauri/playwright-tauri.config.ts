@@ -35,6 +35,30 @@ export default defineConfig({
     trace: "retain-on-failure",
   },
 
+  webServer: [
+    {
+      command: "pnpm --filter desktop dev",
+      url: DEV_URL,
+      cwd: path.resolve(__dirname, "../../.."),
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+    {
+      command: "pnpm --filter api dev",
+      url: "http://localhost:3001/api/health",
+      cwd: path.resolve(__dirname, "../../.."),
+      reuseExistingServer: !process.env.CI,
+      timeout: 120_000,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: {
+        ANVIL_LLM_MODE: "mock",
+      },
+    },
+  ],
+
   projects: [
     {
       name: "tauri-setup",

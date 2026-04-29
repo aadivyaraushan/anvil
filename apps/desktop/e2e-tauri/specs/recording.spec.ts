@@ -94,7 +94,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
     expect(await getInterviewsForProject(projectId)).toHaveLength(1);
   });
 
-  test("stopping after navigating away still uploads onto the conversation that started recording", async ({
+  test("@built stopping after navigating away still uploads onto the conversation that started recording", async ({
     tauriPage,
   }) => {
     const secondInterviewId = await seedInterview({
@@ -130,7 +130,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
     expect(rows).toHaveLength(2);
   });
 
-  test("two sequential recordings attach to their own conversation rows", async ({
+  test("@built two sequential recordings attach to their own conversation rows", async ({
     tauriPage,
   }) => {
     const secondInterviewId = await seedInterview({
@@ -167,7 +167,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
     expect(rows).toHaveLength(2);
   });
 
-  test("native recording IPC rejects duplicate starts and mismatched stops", async ({
+  test("@built native recording IPC rejects duplicate starts and mismatched stops", async ({
     tauriPage,
   }) => {
     await expect
@@ -203,7 +203,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       .toMatchObject({ is_recording: false });
   });
 
-  test("forced microphone start failure leaves UI recoverable and tray idle", async ({
+  test("@built forced microphone start failure leaves UI recoverable and tray idle", async ({
     tauriPage,
   }) => {
     await invoke(tauriPage, "__test_fail_next_recording_start", {
@@ -231,7 +231,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       .toMatch(/\.wav$/);
   });
 
-  test("missing stopped file surfaces an error, resets native state, and permits retry", async ({
+  test("@built missing stopped file surfaces an error, resets native state, and permits retry", async ({
     tauriPage,
   }) => {
     await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
@@ -258,7 +258,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       .toMatch(/\.wav$/);
   });
 
-  test("upload API failure does not create a second row and permits retry", async ({
+  test("@built upload API failure does not create a second row and permits retry", async ({
     tauriPage,
   }) => {
     await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);

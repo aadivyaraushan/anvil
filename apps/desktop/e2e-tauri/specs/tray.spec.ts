@@ -27,7 +27,7 @@ test.describe("tray icon state", () => {
     await restoreAuth(tauriPage);
   });
 
-  test("tray flips to recording while a recording is active", async ({
+  test("@built tray flips to recording while a recording is active", async ({
     tauriPage,
   }) => {
     await expect.poll(() => readTrayState(tauriPage)).toBe("idle");
@@ -48,7 +48,7 @@ test.describe("tray icon state", () => {
       .toBe("idle");
   });
 
-  test("tray stays recording after a rejected stop and resets after the real stop", async ({
+  test("@built tray stays recording after a rejected stop and resets after the real stop", async ({
     tauriPage,
   }) => {
     await expect.poll(() => readTrayState(tauriPage)).toBe("idle");
