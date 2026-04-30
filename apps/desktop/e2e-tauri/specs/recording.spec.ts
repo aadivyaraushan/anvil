@@ -10,6 +10,29 @@ import { clickSelector, existsSelector, visibleText, waitForSelector } from "../
 import { invoke } from "../helpers/ipc";
 import { readTrayState } from "../helpers/tray";
 
+const devUrl = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
+
+async function openProjectReadyForInterview(
+  tauriPage: Parameters<typeof clickSelector>[0],
+  projectId: string,
+  rowInterviewId: string
+): Promise<void> {
+  const url = `${devUrl}/project/${projectId}`;
+  const selector = `[data-testid="interview-row-${rowInterviewId}"]`;
+  await tauriPage.goto(url);
+  const found = await expect
+    .poll(() => existsSelector(tauriPage, selector), { timeout: 7_500 })
+    .toBe(true)
+    .then(
+      () => true,
+      () => false
+    );
+  if (!found) {
+    await tauriPage.goto(url);
+    await waitForSelector(tauriPage, selector);
+  }
+}
+
 // The headline test the harness was built for: the real WKWebView starts a
 // recording from the conversation page, Rust captures a WAV via cpal, and the
 // existing interview row gets a recording_path after upload. Browser
@@ -40,8 +63,6 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
   test("@built recording starts only from a conversation page, not dashboard/capsule", async ({
     tauriPage,
   }) => {
-    const devUrl = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
-
     await tauriPage.goto(`${devUrl}/dashboard`);
     await expect
       .poll(() => visibleText(tauriPage), { timeout: 15_000 })
@@ -52,7 +73,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       .poll(() => visibleText(tauriPage), { timeout: 15_000 })
       .toContain("404");
 
-    await tauriPage.goto(`${devUrl}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await waitForSelector(tauriPage, '[data-testid="start-recording-button"]');
   });
@@ -67,7 +88,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
   test("@built conversation page Start recording to Stop writes recording_path on the existing row", async ({
     tauriPage,
   }) => {
-    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
 
@@ -103,7 +124,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       source: "inperson",
     });
 
-    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
 
@@ -139,7 +160,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       source: "inperson",
     });
 
-    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
 
     for (const id of [interviewId, secondInterviewId]) {
       await clickSelector(tauriPage, `[data-testid="interview-row-${id}"]`);
@@ -210,7 +231,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
       message: "forced mic failure",
     });
 
-    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
 
@@ -234,7 +255,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
   test("@built missing stopped file surfaces an error, resets native state, and permits retry", async ({
     tauriPage,
   }) => {
-    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await invoke(tauriPage, "__test_make_next_stop_return_missing_file");
     await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
@@ -261,7 +282,7 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
   test("@built upload API failure does not create a second row and permits retry", async ({
     tauriPage,
   }) => {
-    await tauriPage.goto(`${process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000"}/project/${projectId}`);
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await tauriPage.evaluate(
       `(() => {

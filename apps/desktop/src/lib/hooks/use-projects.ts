@@ -29,6 +29,7 @@ export function useProjects() {
       if (error) throw error;
       return data as Project[];
     },
+    refetchOnMount: "always",
   });
 }
 

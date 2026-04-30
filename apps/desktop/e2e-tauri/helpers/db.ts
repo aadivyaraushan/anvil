@@ -39,22 +39,61 @@ export async function cleanupProjectsForUser(userId: string): Promise<void> {
   if (error) throw new Error(`cleanupProjectsForUser: ${error.message}`);
 }
 
+export async function upsertSubscription(opts: {
+  userId: string;
+  plan?: "free" | "pro" | "max";
+  status?: string;
+}): Promise<void> {
+  const { error } = await client()
+    .from("subscriptions")
+    .upsert(
+      {
+        user_id: opts.userId,
+        plan: opts.plan ?? "free",
+        status: opts.status ?? "active",
+      },
+      { onConflict: "user_id" }
+    );
+  if (error) throw new Error(`upsertSubscription: ${error.message}`);
+}
+
 export async function seedProject(opts: {
   userId: string;
   name?: string;
+  ideaDescription?: string;
+  targetProfile?: string;
 }): Promise<string> {
   const { data, error } = await client()
     .from("projects")
     .insert({
       user_id: opts.userId,
       name: opts.name ?? "Tauri E2E Project",
-      idea_description: "Tauri E2E test project.",
-      target_profile: "QA engineers",
+      idea_description: opts.ideaDescription ?? "Tauri E2E test project.",
+      target_profile: opts.targetProfile ?? "QA engineers",
     })
     .select("id")
     .single();
   if (error) throw new Error(`seedProject: ${error.message}`);
   return (data as { id: string }).id;
+}
+
+export interface ProjectRow {
+  id: string;
+  user_id: string;
+  name: string;
+  idea_description: string | null;
+  target_profile: string | null;
+  created_at: string;
+}
+
+export async function getProjectsForUser(userId: string): Promise<ProjectRow[]> {
+  const { data, error } = await client()
+    .from("projects")
+    .select("id, user_id, name, idea_description, target_profile, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`getProjectsForUser: ${error.message}`);
+  return (data ?? []) as ProjectRow[];
 }
 
 export async function seedInterview(opts: {
@@ -85,10 +124,14 @@ export interface InterviewRow {
   id: string;
   project_id: string;
   created_at: string;
+  attendee_name: string | null;
+  source: string | null;
   status: string | null;
+  meeting_link: string | null;
   recording_path: string | null;
   duration_seconds: number | null;
   upload_status: string | null;
+  transcript: unknown[] | null;
 }
 
 export async function getInterviewsForProject(
@@ -96,7 +139,7 @@ export async function getInterviewsForProject(
 ): Promise<InterviewRow[]> {
   const { data, error } = await client()
     .from("interviews")
-    .select("id, project_id, created_at, status, recording_path, duration_seconds, upload_status")
+    .select("id, project_id, created_at, attendee_name, source, status, meeting_link, recording_path, duration_seconds, upload_status, transcript")
     .eq("project_id", projectId);
   if (error) throw new Error(`getInterviewsForProject: ${error.message}`);
   return (data ?? []) as InterviewRow[];
