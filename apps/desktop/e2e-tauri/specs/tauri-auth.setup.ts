@@ -23,12 +23,18 @@ test("authenticate as E2E test user", async ({ tauriPage }) => {
       `JSON.stringify({ url: location.href, ready: document.readyState, hasEmail: !!document.querySelector('#email'), bodyLen: (document.body?.innerText||'').length })`
     );
     console.log(`[auth-setup] t=${i + 1}s ${probe}`);
-    if ((JSON.parse(probe) as { hasEmail: boolean }).hasEmail) {
+    const parsed = JSON.parse(probe) as { hasEmail: boolean; ready: string };
+    if (parsed.hasEmail && parsed.ready === "complete") {
       landed = true;
       break;
     }
   }
   if (!landed) throw new Error("login form never rendered");
+
+  // readyState=complete means all scripts loaded, but React may still be
+  // hydrating (attaching event handlers). Give it a moment so the form's
+  // onSubmit is wired up before we click.
+  await new Promise((r) => setTimeout(r, 500));
 
   await tauriPage.fill("#email", process.env.E2E_TEST_EMAIL!);
   await tauriPage.fill("#password", process.env.E2E_TEST_PASSWORD!);
@@ -38,14 +44,27 @@ test("authenticate as E2E test user", async ({ tauriPage }) => {
 
   // Poll the URL ourselves — the plugin's waitForURL appears to require a
   // string exact match and doesn't follow redirects reliably in Tauri mode.
+  // If we're still on /login after 10s, retry the submit in case the first
+  // click landed before React finished hydrating.
   let onDashboard = false;
+  let retried = false;
   for (let i = 0; i < 30; i++) {
     await new Promise((r) => setTimeout(r, 1000));
-    const url = await tauriPage.evaluate<string>(`location.href`);
-    console.log(`[auth-setup] post-click t=${i + 1}s url=${url}`);
+    const probe = await tauriPage.evaluate<string>(
+      `JSON.stringify({ url: location.href, errorText: document.querySelector('.text-destructive')?.textContent ?? null })`
+    );
+    const { url, errorText } = JSON.parse(probe) as { url: string; errorText: string | null };
+    console.log(`[auth-setup] post-click t=${i + 1}s url=${url}${errorText ? ` error="${errorText}"` : ""}`);
     if (url.includes("/dashboard")) {
       onDashboard = true;
       break;
+    }
+    if (!retried && i >= 5) {
+      console.log("[auth-setup] retrying submit — first click may have preceded hydration");
+      await tauriPage.fill("#email", process.env.E2E_TEST_EMAIL!);
+      await tauriPage.fill("#password", process.env.E2E_TEST_PASSWORD!);
+      await tauriPage.click('button[type="submit"]');
+      retried = true;
     }
   }
   if (!onDashboard) throw new Error("never landed on /dashboard after sign-in");
