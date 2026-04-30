@@ -84,7 +84,7 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
   const { isTauri, invoke, readFileBytes } = useTauri()
   const queryClient = useQueryClient()
   const [followupIndex, setFollowupIndex] = useState(0)
-  const [recordingError, setRecordingError] = useState<string | null>(null)
+  const [recordingErrorState, setRecordingErrorState] = useState<{ message: string; interviewId: string } | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [tick, setTick] = useState(0)
@@ -121,10 +121,15 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
     }
   }, [])
 
-  // Clear errors when switching interviews
-  useEffect(() => {
-    setRecordingError(null)
-  }, [interview?.id])
+  const setRecordingError = (msg: string | null) => {
+    if (msg) {
+      const id = recordingInterviewRef.current?.id ?? interview?.id ?? ''
+      setRecordingErrorState({ message: msg, interviewId: id })
+    } else {
+      setRecordingErrorState(null)
+    }
+  }
+  const visibleError = recordingErrorState && recordingErrorState.interviewId === (interview?.id ?? '') ? recordingErrorState.message : null
 
   if (!interview) {
     return (
@@ -493,9 +498,9 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
         ) : null}
       </div>
 
-      {recordingError && (
+      {visibleError && (
         <div className="px-8 py-2 border-b border-border bg-muted/30 text-[12px] text-muted-foreground">
-          {recordingError}
+          {visibleError}
         </div>
       )}
 
