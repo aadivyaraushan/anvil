@@ -44,6 +44,10 @@ export default defineConfig({
       timeout: 120_000,
       stdout: "pipe",
       stderr: "pipe",
+      env: {
+        NEXT_PUBLIC_API_URL:
+          process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001",
+      },
     },
     {
       command: "pnpm --filter api dev",

@@ -157,6 +157,7 @@ jobs:
         name: Start desktop + api dev servers
         env:
           ANVIL_LLM_MODE: mock
+          NEXT_PUBLIC_API_URL: http://localhost:3001
           NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
           NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
