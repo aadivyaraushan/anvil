@@ -75,7 +75,11 @@ test.describe("Offline / network resilience", () => {
       route.fulfill({ status: 200, body: "ok" }),
     );
 
+    const projectsLoaded = page.waitForResponse((resp) =>
+      resp.url().includes("/rest/v1/projects"),
+    );
     await page.goto("/dashboard");
+    await projectsLoaded;
     await expect(page.getByText("Cached Project")).toBeVisible({
       timeout: 10_000,
     });

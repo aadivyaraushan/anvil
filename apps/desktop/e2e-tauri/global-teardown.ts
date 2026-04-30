@@ -1,6 +1,5 @@
 import {
   cleanupProjectsForUser,
-  deleteUser,
   getUserIdByEmail,
 } from "./helpers/db.js";
 
@@ -20,6 +19,9 @@ export default async function tauriGlobalTeardown() {
   if (!userId) return;
 
   await cleanupProjectsForUser(userId);
-  await deleteUser(userId);
-  console.log(`[tauri-global-teardown] Deleted test user: ${userId} (${email})`);
+  // Keep the user alive — the built-app smoke suite (test:e2e:tauri:built)
+  // runs after this suite and reuses the auth snapshot saved during
+  // tauri-auth.setup.ts. Deleting the user here invalidates the JWT tokens
+  // in that snapshot, causing every @built test to fail with stale auth.
+  console.log(`[tauri-global-teardown] Cleaned projects for: ${userId} (${email})`);
 }
