@@ -214,6 +214,7 @@ export async function seedInterview(opts: {
   attendeeName?: string | null;
   attendeeCompany?: string | null;
   status?: "scheduled" | "live" | "completed";
+  uploadStatus?: "none" | "queued" | "uploading" | "done" | "failed";
   transcript?: Array<{ speaker: string; text: string; timestamp: number }>;
   suggestedQuestions?: string[];
 }): Promise<string> {
@@ -227,6 +228,7 @@ export async function seedInterview(opts: {
       attendee_company: opts.attendeeCompany ?? null,
       scheduled_at: new Date().toISOString(),
       status: opts.status ?? "scheduled",
+      upload_status: opts.uploadStatus ?? "none",
       transcript: opts.transcript ?? [],
       suggested_questions: opts.suggestedQuestions ?? [],
     })
@@ -234,6 +236,25 @@ export async function seedInterview(opts: {
     .single();
   if (error) throw new Error(`seedInterview failed: ${error.message}`);
   return (data as { id: string }).id;
+}
+
+export async function updateInterviewTranscript(opts: {
+  interviewId: string;
+  status?: "scheduled" | "live" | "completed";
+  uploadStatus?: "none" | "queued" | "uploading" | "done" | "failed";
+  transcript: Array<{ speaker: string; text: string; timestamp: number }>;
+}): Promise<void> {
+  const supabase = adminClient();
+  const { error } = await supabase
+    .from("interviews")
+    .update({
+      transcript: opts.transcript,
+      ...(opts.status ? { status: opts.status } : {}),
+      ...(opts.uploadStatus ? { upload_status: opts.uploadStatus } : {}),
+    })
+    .eq("id", opts.interviewId);
+  if (error)
+    throw new Error(`updateInterviewTranscript failed: ${error.message}`);
 }
 
 export async function seedAnalystDocument(opts: {

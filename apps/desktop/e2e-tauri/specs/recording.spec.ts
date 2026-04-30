@@ -5,6 +5,7 @@ import {
   seedInterview,
   cleanupProjectsForUser,
   getInterviewsForProject,
+  updateInterviewTranscript,
 } from "../helpers/db";
 import { clickSelector, existsSelector, visibleText, waitForSelector } from "../helpers/dom";
 import { invoke } from "../helpers/ipc";
@@ -277,6 +278,39 @@ test.describe("recording (real Tauri WKWebView + cpal)", () => {
         timeout: 30_000,
       })
       .toMatch(/\.wav$/);
+  });
+
+  test("@built canvas auto-renders transcript after recording upload completes", async ({
+    tauriPage,
+  }) => {
+    await openProjectReadyForInterview(tauriPage, projectId, interviewId);
+    await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
+    await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
+    await new Promise((r) => setTimeout(r, 1_500));
+    await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
+
+    await expect
+      .poll(
+        async () => {
+          const rows = await getInterviewsForProject(projectId);
+          return rows.find((row) => row.id === interviewId)?.recording_path ?? null;
+        },
+        { timeout: 30_000, message: "recording_path never appeared" }
+      )
+      .toMatch(/\.wav$/);
+
+    await updateInterviewTranscript({
+      interviewId,
+      status: "completed",
+      uploadStatus: "done",
+      transcript: [
+        { speaker: "Speaker 0", text: "Tauri transcript auto-render verified.", timestamp: 0 },
+      ],
+    });
+
+    await expect
+      .poll(() => visibleText(tauriPage), { timeout: 15_000 })
+      .toContain("Tauri transcript auto-render verified.");
   });
 
   test("@built upload API failure does not create a second row and permits retry", async ({

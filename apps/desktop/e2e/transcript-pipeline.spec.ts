@@ -5,6 +5,7 @@ import {
   seedInterview,
   seedProject,
   supportsRedesignSchema,
+  updateInterviewTranscript,
 } from "./helpers/db";
 
 // End-to-end coverage of the transcription pipeline as it surfaces in
@@ -113,6 +114,44 @@ test.describe("Transcript pipeline — render states", () => {
     await expect(
       page.getByText(/Listening/i),
     ).toBeVisible({ timeout: 10_000 });
+  });
+
+  test("transcript auto-appears when interview transitions from uploading to completed", async ({
+    page,
+  }) => {
+    const projectId = await seedProject({
+      userId: testUserId,
+      name: "Transcript: auto-refresh",
+    });
+    const interviewId = await seedInterview({
+      projectId,
+      attendeeName: "Auto Refresh Ali",
+      status: "live",
+      uploadStatus: "uploading",
+      transcript: [],
+    });
+
+    await page.goto(`/project/${projectId}`);
+    await page.getByText("Auto Refresh Ali").click();
+
+    await expect(page.getByText(/Listening/i)).toBeVisible({ timeout: 10_000 });
+
+    await updateInterviewTranscript({
+      interviewId,
+      status: "completed",
+      uploadStatus: "done",
+      transcript: [
+        { speaker: "Speaker 0", text: "Hello, this is the auto-refresh test.", timestamp: 100 },
+        { speaker: "Speaker 1", text: "Great, the transcript appeared automatically.", timestamp: 2500 },
+      ],
+    });
+
+    await expect(
+      page.getByText("Hello, this is the auto-refresh test."),
+    ).toBeVisible({ timeout: 10_000 });
+    await expect(
+      page.getByText("Great, the transcript appeared automatically."),
+    ).toBeVisible();
   });
 });
 

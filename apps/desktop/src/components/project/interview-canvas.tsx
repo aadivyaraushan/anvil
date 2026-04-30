@@ -1,8 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { MapPin, Mic, Square, Video, Link as LinkIcon } from 'lucide-react'
 import type { Interview } from '@/lib/supabase/types'
+import { interviewKeys } from '@/lib/hooks/use-interviews'
 import { LiveDot } from './live-dot'
 import { SourceGlyph } from './source-glyph'
 import { SuggestedFollowupCard } from './suggested-followup-card'
@@ -80,6 +82,7 @@ function pickMimeType(): string {
 
 export function InterviewCanvas({ interview }: InterviewCanvasProps) {
   const { isTauri, invoke, readFileBytes } = useTauri()
+  const queryClient = useQueryClient()
   const [followupIndex, setFollowupIndex] = useState(0)
   const [recordingError, setRecordingError] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -355,7 +358,12 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
       }
       setRecordingError(`Upload failed — ${detail}. Please try again.`)
       console.error('[canvas] upload failed:', detail)
+      return
     }
+
+    queryClient.invalidateQueries({
+      queryKey: interviewKeys.list(capturedInterview.project_id),
+    })
   }
 
   return (
