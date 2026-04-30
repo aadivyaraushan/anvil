@@ -263,17 +263,18 @@ async function transcribeAndPersist(args: {
     text: u.transcript ?? "",
     timestamp: Math.round((u.start ?? 0) * 1000),
   }));
+  const persistPayload = {
+    ...(transcript.length > 0 ? { transcript } : {}),
+    upload_status: "done" as const,
+    status: "completed" as const,
+  };
 
   // `.select("id")` makes a 0-row update observable. Without it, if the
   // interview was deleted (or never existed under this id), `.update()`
   // returns `error: null` and we'd report success while writing nothing.
   const { error: persistErr, data: persistedRows } = await serviceSupabase
     .from("interviews")
-    .update({
-      transcript,
-      upload_status: "done",
-      status: "completed",
-    })
+    .update(persistPayload)
     .eq("id", interviewId)
     .select("id");
 

@@ -62,6 +62,8 @@ export async function seedProject(opts: {
   name?: string;
   ideaDescription?: string;
   targetProfile?: string;
+  analystStatus?: "idle" | "generating" | "complete" | "failed";
+  analystRunCount?: number;
 }): Promise<string> {
   const { data, error } = await client()
     .from("projects")
@@ -70,6 +72,10 @@ export async function seedProject(opts: {
       name: opts.name ?? "Tauri E2E Project",
       idea_description: opts.ideaDescription ?? "Tauri E2E test project.",
       target_profile: opts.targetProfile ?? "QA engineers",
+      ...(opts.analystStatus ? { analyst_status: opts.analystStatus } : {}),
+      ...(typeof opts.analystRunCount === "number"
+        ? { analyst_run_count: opts.analystRunCount }
+        : {}),
     })
     .select("id")
     .single();
@@ -101,6 +107,10 @@ export async function seedInterview(opts: {
   attendeeName?: string | null;
   source?: "desktop" | "cal" | "inperson" | "uploaded" | "meet-link";
   status?: "scheduled" | "live" | "completed";
+  uploadStatus?: "none" | "queued" | "uploading" | "done" | "failed" | null;
+  transcript?: Array<{ speaker: string; text: string; timestamp: number }>;
+  suggestedQuestions?: string[];
+  recordingPath?: string | null;
 }): Promise<string> {
   const { data, error } = await client()
     .from("interviews")
@@ -111,8 +121,10 @@ export async function seedInterview(opts: {
       source: opts.source ?? "inperson",
       scheduled_at: new Date().toISOString(),
       status: opts.status ?? "scheduled",
-      transcript: [],
-      suggested_questions: [],
+      upload_status: opts.uploadStatus ?? "none",
+      transcript: opts.transcript ?? [],
+      suggested_questions: opts.suggestedQuestions ?? [],
+      recording_path: opts.recordingPath ?? null,
     })
     .select("id")
     .single();
@@ -143,4 +155,132 @@ export async function getInterviewsForProject(
     .eq("project_id", projectId);
   if (error) throw new Error(`getInterviewsForProject: ${error.message}`);
   return (data ?? []) as InterviewRow[];
+}
+
+export async function updateInterviewTranscript(opts: {
+  interviewId: string;
+  status?: "scheduled" | "live" | "completed";
+  uploadStatus?: "none" | "queued" | "uploading" | "done" | "failed";
+  transcript: Array<{ speaker: string; text: string; timestamp: number }>;
+}): Promise<void> {
+  const { error } = await client()
+    .from("interviews")
+    .update({
+      transcript: opts.transcript,
+      ...(opts.status ? { status: opts.status } : {}),
+      ...(opts.uploadStatus ? { upload_status: opts.uploadStatus } : {}),
+    })
+    .eq("id", opts.interviewId);
+  if (error) throw new Error(`updateInterviewTranscript: ${error.message}`);
+}
+
+export interface PersonaRow {
+  id: string;
+  project_id: string;
+  name: string;
+  description: string | null;
+  job_titles: string[] | null;
+  pain_points: string[] | null;
+  status: string | null;
+}
+
+export async function seedPersona(opts: {
+  projectId: string;
+  name?: string;
+  description?: string;
+  jobTitles?: string[];
+  painPoints?: string[];
+  status?: "suggested" | "confirmed";
+}): Promise<string> {
+  const { data, error } = await client()
+    .from("personas")
+    .insert({
+      project_id: opts.projectId,
+      name: opts.name ?? "Built Finance Lead",
+      description: opts.description ?? "Owns monthly reporting and finance workflows.",
+      job_titles: opts.jobTitles ?? ["Head of Finance"],
+      pain_points: opts.painPoints ?? ["Manual reporting"],
+      status: opts.status ?? "suggested",
+    })
+    .select("id")
+    .single();
+  if (error) throw new Error(`seedPersona: ${error.message}`);
+  return (data as { id: string }).id;
+}
+
+export async function getPersonasForProject(projectId: string): Promise<PersonaRow[]> {
+  const { data, error } = await client()
+    .from("personas")
+    .select("id, project_id, name, description, job_titles, pain_points, status")
+    .eq("project_id", projectId)
+    .order("created_at", { ascending: true });
+  if (error) throw new Error(`getPersonasForProject: ${error.message}`);
+  return (data ?? []) as PersonaRow[];
+}
+
+export interface AnalystDocumentRow {
+  project_id: string;
+  content: Record<string, unknown> | null;
+  pain_points: unknown[] | null;
+  patterns: unknown[] | null;
+  key_quotes: unknown[] | null;
+  customer_language: string[] | null;
+  saturation_score: number | null;
+  interview_count: number | null;
+  unique_pattern_count: number | null;
+}
+
+export async function seedAnalystDocument(opts: {
+  projectId: string;
+  content?: Record<string, unknown>;
+  painPoints?: Array<Record<string, unknown>>;
+  patterns?: Array<Record<string, unknown>>;
+  keyQuotes?: Array<Record<string, unknown>>;
+  customerLanguage?: string[];
+  saturationScore?: number;
+  interviewCount?: number;
+  uniquePatternCount?: number;
+}): Promise<void> {
+  const { error } = await client()
+    .from("analyst_documents")
+    .upsert(
+      {
+        project_id: opts.projectId,
+        content: opts.content ?? {},
+        pain_points: opts.painPoints ?? [],
+        patterns: opts.patterns ?? [],
+        key_quotes: opts.keyQuotes ?? [],
+        customer_language: opts.customerLanguage ?? [],
+        saturation_score: opts.saturationScore ?? 0,
+        interview_count: opts.interviewCount ?? 0,
+        unique_pattern_count: opts.uniquePatternCount ?? 0,
+      },
+      { onConflict: "project_id" }
+    );
+  if (error) throw new Error(`seedAnalystDocument: ${error.message}`);
+}
+
+export async function getAnalystDocument(
+  projectId: string
+): Promise<AnalystDocumentRow | null> {
+  const { data, error } = await client()
+    .from("analyst_documents")
+    .select("project_id, content, pain_points, patterns, key_quotes, customer_language, saturation_score, interview_count, unique_pattern_count")
+    .eq("project_id", projectId)
+    .maybeSingle();
+  if (error) throw new Error(`getAnalystDocument: ${error.message}`);
+  return (data as AnalystDocumentRow | null) ?? null;
+}
+
+export async function getProjectAnalysisState(projectId: string): Promise<{
+  analyst_status: string | null;
+  analyst_run_count: number | null;
+} | null> {
+  const { data, error } = await client()
+    .from("projects")
+    .select("analyst_status, analyst_run_count")
+    .eq("id", projectId)
+    .maybeSingle();
+  if (error) throw new Error(`getProjectAnalysisState: ${error.message}`);
+  return data as { analyst_status: string | null; analyst_run_count: number | null } | null;
 }

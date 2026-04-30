@@ -47,6 +47,7 @@ export function useProject(id: string) {
       return data as Project;
     },
     enabled: Boolean(id),
+    refetchOnMount: "always",
   });
 }
 
@@ -234,6 +235,7 @@ export function useUpsertPersonas() {
         description: string;
         job_titles: string[];
         pain_points: string[];
+        status?: "suggested" | "confirmed";
       }>;
     }) => {
       const supabase = getSupabase();

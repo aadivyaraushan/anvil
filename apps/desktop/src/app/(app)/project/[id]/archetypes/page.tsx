@@ -44,6 +44,7 @@ function fromEditable(ep: EditablePersona) {
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean),
+    status: ep.status,
   };
 }
 

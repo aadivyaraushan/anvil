@@ -166,7 +166,15 @@ export function useCreateInterview() {
 
       return (await res.json()) as Interview;
     },
-    onSuccess: (_data, params) => {
+    onSuccess: (created, params) => {
+      queryClient.setQueryData<{ interviews: Interview[]; grouped: GroupedInterviews }>(
+        interviewKeys.list(params.projectId),
+        (old) => {
+          if (!old) return { interviews: [created], grouped: groupInterviews([created]) };
+          const interviews = [created, ...old.interviews.filter((i) => i.id !== created.id)];
+          return { interviews, grouped: groupInterviews(interviews) };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: interviewKeys.list(params.projectId) });
     },
   });
@@ -249,7 +257,6 @@ export function useQueueUpload(interviewId: string) {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
       audioBlob,
     }: {
       projectId: string;

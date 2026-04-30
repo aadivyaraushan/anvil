@@ -166,6 +166,7 @@ function buildUploadRequest(opts: {
   projectId?: string | null;
   attendeeName?: string;
   source?: string;
+  interviewId?: string;
   rawBody?: BodyInit;
 } = {}): Request {
   const fd = new FormData();
@@ -180,6 +181,7 @@ function buildUploadRequest(opts: {
   }
   if (opts.attendeeName) fd.set("attendee_name", opts.attendeeName);
   if (opts.source) fd.set("source", opts.source);
+  if (opts.interviewId) fd.set("interview_id", opts.interviewId);
 
   const headers = new Headers();
   if (opts.token !== null) {
@@ -490,6 +492,58 @@ describe("POST /api/interviews/upload — happy path", () => {
     const { POST } = await importRoute();
     const res = await POST(buildUploadRequest() as never);
     expect(res.status).toBe(201);
+    fetchSpy.mockRestore();
+  });
+
+  it("does not overwrite an existing interview transcript when Deepgram returns no utterances", async () => {
+    userClient.from.mockImplementation((table: string) =>
+      makeQueryStub({
+        selectSingle: async () => ({
+          data:
+            table === "interviews"
+              ? { id: "iv-existing", project_id: PROJECT_ID }
+              : { id: PROJECT_ID },
+          error: null,
+        }),
+      }),
+    );
+    const interviewUpdates: Array<Record<string, unknown>> = [];
+    serviceClient.from.mockImplementation(() => {
+      const q = makeQueryStub({
+        updateResult: async () => ({ error: null, data: [{ id: "iv-existing" }], count: 1 }),
+      });
+      const origUpdate = q.update;
+      q.update = vi.fn((payload: Record<string, unknown>) => {
+        interviewUpdates.push(payload);
+        return (origUpdate as unknown as (...a: unknown[]) => unknown)(payload) as ReturnType<typeof q.update>;
+      }) as unknown as SupabaseQueryShape["update"];
+      return q;
+    });
+    serviceClient.storage.from.mockImplementation(() => ({
+      upload: vi.fn(async () => ({ data: { path: "x" }, error: null })),
+      createSignedUrl: vi.fn(async () => ({
+        data: { signedUrl: "https://signed.example/audio.wav" },
+        error: null,
+      })),
+    }));
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ results: { utterances: [] } }), {
+        status: 200,
+      }),
+    );
+
+    const { POST } = await importRoute();
+    const res = await POST(buildUploadRequest({ interviewId: "iv-existing" }) as never);
+    expect(res.status).toBe(201);
+
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+
+    const completedUpdate = interviewUpdates.find(
+      (payload) => payload.status === "completed" && payload.upload_status === "done",
+    );
+    expect(completedUpdate).toBeTruthy();
+    expect(completedUpdate).not.toHaveProperty("transcript");
     fetchSpy.mockRestore();
   });
 });
