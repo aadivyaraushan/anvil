@@ -121,7 +121,7 @@ jobs:
         run: pnpm install --frozen-lockfile=false
 
       - if: steps.changes.outputs.run == 'true'
-        run: pnpm exec playwright install chromium
+        run: pnpm --filter desktop exec playwright install chromium
 
       # Pre-grant microphone access. Bundle is unsigned (signingIdentity:
       # null) so TCC accepts a direct insert. CI runners don't have a Keychain
