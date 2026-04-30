@@ -10,7 +10,7 @@ const DEV_URL = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
 // Sign in once via the real /login form inside the WKWebView, then capture
 // localStorage. Subsequent specs restore the snapshot via the fixture and
 // skip the form.
-test("authenticate as E2E test user", async ({ tauriPage }) => {
+test("@built authenticate as E2E test user", async ({ tauriPage }) => {
   test.setTimeout(60_000);
 
   await tauriPage.goto(`${DEV_URL}/login`);
