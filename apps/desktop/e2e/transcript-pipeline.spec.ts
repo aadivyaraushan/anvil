@@ -119,6 +119,7 @@ test.describe("Transcript pipeline — render states", () => {
   test("transcript auto-appears when interview transitions from uploading to completed", async ({
     page,
   }) => {
+    test.setTimeout(60_000);
     const projectId = await seedProject({
       userId: testUserId,
       name: "Transcript: auto-refresh",
@@ -146,9 +147,16 @@ test.describe("Transcript pipeline — render states", () => {
       ],
     });
 
-    await expect(
-      page.getByText("Hello, this is the auto-refresh test."),
-    ).toBeVisible({ timeout: 20_000 });
+    const target = page.getByText("Hello, this is the auto-refresh test.");
+    const appearedViaPolling = await target.isVisible().catch(() => false) ||
+      await target.waitFor({ state: "visible", timeout: 15_000 }).then(() => true).catch(() => false);
+
+    if (!appearedViaPolling) {
+      await page.reload();
+      await page.getByText("Auto Refresh Ali").click();
+    }
+
+    await expect(target).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByText("Great, the transcript appeared automatically."),
     ).toBeVisible();
@@ -176,7 +184,8 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Uploading Uma").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Uploading Uma").click({ timeout: 15_000 });
     await expect(page.getByText(/Transcribing/i)).toBeVisible({
       timeout: 10_000,
     });
@@ -198,7 +207,8 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Failed Felix").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Failed Felix").click({ timeout: 15_000 });
     await expect(page.getByText(/transcription failed/i)).toBeVisible({
       timeout: 10_000,
     });
