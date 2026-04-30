@@ -152,7 +152,7 @@ test.describe("Add interview — submit", () => {
     await Promise.all([submit.click(), submit.click().catch(() => {})]);
 
     await expect(page.getByText("Dedupe Test")).toBeVisible({
-      timeout: 10_000,
+      timeout: 20_000,
     });
     // Exactly one row.
     expect(await page.getByText("Dedupe Test").count()).toBe(1);

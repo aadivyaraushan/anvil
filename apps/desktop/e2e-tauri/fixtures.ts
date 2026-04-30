@@ -15,11 +15,7 @@ export type TauriPage = RealTauriPage | BrowserPageAdapter;
 const DEV_URL = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
 
 const base = createTauriTest({
-  // Empty string skips the fixture's initial navigation + __PW_ACTIVE__
-  // wait. Every spec navigates on its own (auth.setup → /login,
-  // restoreAuth → DEV_URL), so the fixture navigation was redundant and
-  // its fixed 30s timeout caused flakes when the dev server was cold.
-  devUrl: "",
+  devUrl: DEV_URL,
   ipcMocks: {},
   mcpSocket: TAURI_SOCKET,
 });
@@ -34,15 +30,7 @@ export async function restoreAuth(tauriPage: TauriPage): Promise<void> {
   const snapshot = loadAuthSnapshot();
   if (!snapshot) return;
   // localStorage is per-origin — land on the dev origin before writing keys.
-  // Since we skip the fixture's devUrl navigation, the WKWebView starts at a
-  // blank page. We must wait for the page to fully load before writing to
-  // localStorage, otherwise the origin isn't established yet.
   await tauriPage.goto(DEV_URL);
-  for (let i = 0; i < 30; i++) {
-    const ready = await tauriPage.evaluate<string>(`document.readyState`);
-    if (ready === "complete") break;
-    await new Promise((r) => setTimeout(r, 1000));
-  }
   await tauriPage.evaluate(
     `(() => {
        sessionStorage.clear();

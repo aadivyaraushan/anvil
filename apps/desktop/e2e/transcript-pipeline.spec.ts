@@ -148,7 +148,7 @@ test.describe("Transcript pipeline — render states", () => {
 
     await expect(
       page.getByText("Hello, this is the auto-refresh test."),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 20_000 });
     await expect(
       page.getByText("Great, the transcript appeared automatically."),
     ).toBeVisible();

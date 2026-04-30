@@ -174,8 +174,12 @@ jobs:
               sleep 2
             done
           done
-          # Warm up the login page so Next.js compiles it before tests start.
-          curl -fsS http://localhost:3000/login >/dev/null 2>&1 || true
+          # Warm up key pages so Next.js compiles them before Tauri E2E starts.
+          # The Tauri binary takes minutes to compile; without this, the dev
+          # server's on-demand compilation can cause __PW_ACTIVE__ timeouts.
+          for path in / /login /dashboard; do
+            curl -fsS "http://localhost:3000$path" >/dev/null 2>&1 || true
+          done
 
       - if: steps.changes.outputs.run == 'true'
         name: Run Tauri E2E suite
