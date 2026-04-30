@@ -174,6 +174,8 @@ jobs:
               sleep 2
             done
           done
+          # Warm up the login page so Next.js compiles it before tests start.
+          curl -fsS http://localhost:3000/login >/dev/null 2>&1 || true
 
       - if: steps.changes.outputs.run == 'true'
         name: Run Tauri E2E suite

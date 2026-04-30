@@ -15,9 +15,10 @@ export type TauriPage = RealTauriPage | BrowserPageAdapter;
 const DEV_URL = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
 
 const base = createTauriTest({
-  devUrl: DEV_URL,
-  // Tauri mode hits the real WKWebView — no IPC mocks required. The browser
-  // suite already covers headless-Chromium fallback, so we don't dual-run.
+  // Skip devUrl so the fixture doesn't navigate + wait for __PW_ACTIVE__
+  // during setup. Every spec navigates on its own (auth.setup → /login,
+  // restoreAuth → DEV_URL), so the fixture navigation was redundant and
+  // its fixed 30s timeout caused flakes in CI when the dev server was cold.
   ipcMocks: {},
   mcpSocket: TAURI_SOCKET,
 });
