@@ -34,7 +34,15 @@ export async function restoreAuth(tauriPage: TauriPage): Promise<void> {
   const snapshot = loadAuthSnapshot();
   if (!snapshot) return;
   // localStorage is per-origin — land on the dev origin before writing keys.
+  // Since we skip the fixture's devUrl navigation, the WKWebView starts at a
+  // blank page. We must wait for the page to fully load before writing to
+  // localStorage, otherwise the origin isn't established yet.
   await tauriPage.goto(DEV_URL);
+  for (let i = 0; i < 30; i++) {
+    const ready = await tauriPage.evaluate<string>(`document.readyState`);
+    if (ready === "complete") break;
+    await new Promise((r) => setTimeout(r, 1000));
+  }
   await tauriPage.evaluate(
     `(() => {
        sessionStorage.clear();
