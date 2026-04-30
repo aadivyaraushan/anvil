@@ -15,10 +15,11 @@ export type TauriPage = RealTauriPage | BrowserPageAdapter;
 const DEV_URL = process.env.ANVIL_E2E_DEV_URL ?? "http://localhost:3000";
 
 const base = createTauriTest({
-  // Skip devUrl so the fixture doesn't navigate + wait for __PW_ACTIVE__
-  // during setup. Every spec navigates on its own (auth.setup → /login,
+  // Empty string skips the fixture's initial navigation + __PW_ACTIVE__
+  // wait. Every spec navigates on its own (auth.setup → /login,
   // restoreAuth → DEV_URL), so the fixture navigation was redundant and
-  // its fixed 30s timeout caused flakes in CI when the dev server was cold.
+  // its fixed 30s timeout caused flakes when the dev server was cold.
+  devUrl: "",
   ipcMocks: {},
   mcpSocket: TAURI_SOCKET,
 });
