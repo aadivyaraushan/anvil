@@ -121,6 +121,11 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
     }
   }, [])
 
+  // Clear errors when switching interviews
+  useEffect(() => {
+    setRecordingError(null)
+  }, [interview?.id])
+
   if (!interview) {
     return (
       <main className="flex flex-col h-full items-center justify-center">
@@ -361,6 +366,20 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
       return
     }
 
+    queryClient.setQueryData(
+      interviewKeys.list(capturedInterview.project_id),
+      (old: { interviews: Interview[] } | undefined) => {
+        if (!old) return old
+        return {
+          ...old,
+          interviews: old.interviews.map((i) =>
+            i.id === capturedInterview.id
+              ? { ...i, status: 'live' as const, upload_status: 'uploading' as const }
+              : i
+          ),
+        }
+      }
+    )
     queryClient.invalidateQueries({
       queryKey: interviewKeys.list(capturedInterview.project_id),
     })
@@ -449,6 +468,10 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
               {uploading ? 'Saving…' : 'Stop'}
             </Button>
           </div>
+        ) : (uploading || interview.upload_status === 'uploading') ? (
+          <span className="text-[12px] text-muted-foreground">
+            Processing…
+          </span>
         ) : isScheduled ? (
           <Button
             size="sm"
@@ -503,11 +526,30 @@ export function InterviewCanvas({ interview }: InterviewCanvasProps) {
                 <>
                   Recording… transcript will appear here once you stop.
                 </>
+              ) : (uploading || interview.upload_status === 'uploading') ? (
+                <>
+                  Transcribing… your recording is being processed. The transcript will appear shortly.
+                </>
               ) : isLive ? (
                 <>
                   Listening… the live transcript will stream in here as
                   {inPerson ? ' the conversation' : ' the call'} unfolds.
                 </>
+              ) : interview.upload_status === 'failed' ? (
+                <div className="space-y-3">
+                  <p>
+                    Transcription failed. You can try recording again.
+                  </p>
+                  <Button
+                    size="sm"
+                    data-testid="start-recording-button"
+                    onClick={handleStartRecording}
+                    className="text-[12px] h-7 inline-flex items-center gap-1.5"
+                  >
+                    <Mic className="w-3 h-3" />
+                    Start recording
+                  </Button>
+                </div>
               ) : isScheduled ? (
                 <div className="space-y-3">
                   <p>

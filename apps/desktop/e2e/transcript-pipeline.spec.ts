@@ -134,7 +134,7 @@ test.describe("Transcript pipeline — render states", () => {
     await page.goto(`/project/${projectId}`);
     await page.getByText("Auto Refresh Ali").click();
 
-    await expect(page.getByText(/Listening/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/Transcribing/i)).toBeVisible({ timeout: 10_000 });
 
     await updateInterviewTranscript({
       interviewId,
@@ -160,32 +160,66 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
     test.skip(!schemaReady, "Requires migrations 010+ (interviews columns).");
   });
 
-  // The desktop doesn't currently render upload_status as a distinct UI
-  // affordance (the row just shows the interview attendee + section).
-  // These tests pin the contract: regardless of upload_status value,
-  // the row is interactive and the canvas opens. Catches regressions
-  // where a 'failed' or 'queued' status would crash the row renderer.
+  test("upload_status='uploading' shows transcribing message", async ({
+    page,
+  }) => {
+    const projectId = await seedProject({
+      userId: testUserId,
+      name: "Transcript: uploading",
+    });
+    await seedInterview({
+      projectId,
+      attendeeName: "Uploading Uma",
+      status: "live",
+      uploadStatus: "uploading",
+      transcript: [],
+    });
 
-  test("a 'failed' interview row is still clickable and opens canvas", async ({
+    await page.goto(`/project/${projectId}`);
+    await page.getByText("Uploading Uma").click();
+    await expect(page.getByText(/Transcribing/i)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test("upload_status='failed' shows transcription failed and retry", async ({
     page,
   }) => {
     const projectId = await seedProject({
       userId: testUserId,
       name: "Transcript: failed",
     });
-    // We can't pass upload_status through seedInterview today; just
-    // verify the inbox doesn't crash on a row with no transcript and
-    // status='completed' (closest analog to the Deepgram-failed case
-    // where the row exists but transcript is empty).
     await seedInterview({
       projectId,
       attendeeName: "Failed Felix",
-      status: "completed",
+      status: "scheduled",
+      uploadStatus: "failed",
       transcript: [],
     });
 
     await page.goto(`/project/${projectId}`);
     await page.getByText("Failed Felix").click();
+    await expect(page.getByText(/transcription failed/i)).toBeVisible({
+      timeout: 10_000,
+    });
+  });
+
+  test("a completed interview with no transcript shows 'no transcript' message", async ({
+    page,
+  }) => {
+    const projectId = await seedProject({
+      userId: testUserId,
+      name: "Transcript: empty completed",
+    });
+    await seedInterview({
+      projectId,
+      attendeeName: "Empty Edith",
+      status: "completed",
+      transcript: [],
+    });
+
+    await page.goto(`/project/${projectId}`);
+    await page.getByText("Empty Edith").click();
     await expect(page.getByText(/no transcript available/i)).toBeVisible({
       timeout: 10_000,
     });

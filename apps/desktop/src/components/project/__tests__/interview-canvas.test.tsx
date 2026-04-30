@@ -128,4 +128,50 @@ describe("InterviewCanvas", () => {
       screen.queryByRole("button", { name: /start recording/i })
     ).not.toBeInTheDocument();
   });
+
+  it("shows 'Processing' when upload_status is uploading", () => {
+    const iv: Interview = {
+      ...BASE_INTERVIEW,
+      status: "live",
+      upload_status: "uploading",
+      transcript: [],
+    };
+    renderCanvas(iv);
+    expect(screen.getByText("Processing…")).toBeInTheDocument();
+  });
+
+  it("shows 'Transcribing' message when upload_status is uploading and transcript empty", () => {
+    const iv: Interview = {
+      ...BASE_INTERVIEW,
+      status: "live",
+      upload_status: "uploading",
+      transcript: [],
+    };
+    renderCanvas(iv);
+    expect(screen.getByText(/transcribing/i)).toBeInTheDocument();
+  });
+
+  it("shows 'Transcription failed' when upload_status is failed", () => {
+    const iv: Interview = {
+      ...BASE_INTERVIEW,
+      status: "scheduled",
+      upload_status: "failed",
+      transcript: [],
+    };
+    renderCanvas(iv);
+    expect(screen.getByText(/transcription failed/i)).toBeInTheDocument();
+  });
+
+  it("shows retry button when upload_status is failed", () => {
+    const iv: Interview = {
+      ...BASE_INTERVIEW,
+      status: "scheduled",
+      upload_status: "failed",
+      transcript: [],
+    };
+    renderCanvas(iv);
+    expect(
+      screen.getAllByRole("button", { name: /start recording/i }).length
+    ).toBeGreaterThanOrEqual(1);
+  });
 });
