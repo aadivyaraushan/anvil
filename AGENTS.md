@@ -23,3 +23,32 @@ Typecheck and build passing are necessary but **not sufficient**. Before reporti
 - ❌ Mocking the very thing the bug lives in. The transcript-save bug shipped because `recording.spec.ts` mocked `**/rest/v1/projects**` and never exercised the actual upload+persist path.
 - ❌ Asserting only that elements exist on the page. UI presence ≠ functionality.
 - ❌ Reporting a fix as done because `pnpm typecheck` and `pnpm build` pass. They will pass for a button that does nothing.
+
+## Two e2e suites: which one to write in
+
+We ship a desktop app via Tauri and a browser experience via the same Next.js codebase. Bugs come from both — write the spec in the suite that exercises the layer the bug lives in.
+
+| Layer your change touches                       | Write spec in                              |
+| ----------------------------------------------- | ------------------------------------------ |
+| UI / React state / API calls / Supabase RLS     | `apps/desktop/e2e/` (browser, Chromium)    |
+| `@tauri-apps/api`, `invoke()`, Tauri events     | `apps/desktop/e2e-tauri/` (real WKWebView) |
+| Native window, tray, deep link, global shortcut | `apps/desktop/e2e-tauri/`                  |
+| Real audio capture / file I/O / mic permission  | `apps/desktop/e2e-tauri/`                  |
+| macOS WKWebView render / scroll / focus quirks  | `apps/desktop/e2e-tauri/`                  |
+
+**The browser suite cannot fail on a real Tauri-only bug**, even if it looks like it covers the flow. If your change touches anything in the second column, the bug is invisible to Chromium — write the Tauri spec.
+
+### Running the Tauri suite
+
+```bash
+# In one terminal (boots the Next.js dev servers)
+pnpm --filter desktop dev          # :3000
+pnpm --filter api dev              # :3001  (set ANVIL_LLM_MODE=mock for mocked LLM)
+
+# In another terminal — global-setup spawns `cargo tauri dev --features e2e`
+pnpm --filter desktop test:e2e:tauri
+```
+
+First run on macOS will trigger the system mic-permission prompt. Approve it once; CI pre-grants via TCC database manipulation (see `.github/workflows/tauri-build.yml` `e2e-tauri` job).
+
+Test-only Rust commands (`__test_get_tray_state`, `__test_dispatch_deep_link`, `__test_get_last_deep_link`) and the `tauri-plugin-playwright` dependency are gated behind the `e2e` Cargo feature in `apps/desktop/src-tauri/Cargo.toml`. **Production DMGs do not include them** — verify with `nm` if changing the Cargo manifest.

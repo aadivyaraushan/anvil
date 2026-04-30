@@ -7,16 +7,24 @@ edition = "2021"
 name = "anvil_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
+[features]
+default = []
+# e2e: pulls in tauri-plugin-playwright + test-only IPC commands. Built only by
+# CI / `pnpm tauri:build:e2e`. Production DMGs do not enable this feature, so
+# the plugin and `__test_*` commands are absent from the release binary.
+e2e = ["dep:tauri-plugin-playwright"]
+
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["devtools", "tray-icon", "image-png"] }
 tauri-plugin-deep-link = "2"
-tauri-plugin-global-shortcut = "2"
 tauri-plugin-log = "2"
 tauri-plugin-store = "2"
 tauri-plugin-fs = "2"
+# Pinned to 0.2.x. Vendor a fork if upstream stalls — see e2e-tauri/README.
+tauri-plugin-playwright = { version = "0.2", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["sync", "time"] }

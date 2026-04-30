@@ -26,8 +26,8 @@ export async function POST(req: NextRequest) {
   const attendee_name = formData.get("attendee_name") as string | null;
   const source = (formData.get("source") as string | null) ?? "uploaded";
   // When the recording was started from an existing conversation page,
-  // the capsule passes the interview_id back so we append to that row
-  // instead of inserting a brand-new conversation.
+  // the client passes the interview_id back so we append to that row instead
+  // of inserting a brand-new conversation.
   const interview_id = formData.get("interview_id") as string | null;
 
   if (!file || !project_id) {
@@ -95,7 +95,7 @@ export async function POST(req: NextRequest) {
 
     interview = { id: interview_id };
   } else {
-    // Insert-new path (used by the dashboard's quick-capture button).
+    // Insert-new path (used by direct upload/import callers).
     const { data: created, error: insertError } = await serviceSupabase
       .from("interviews")
       .insert({
@@ -263,17 +263,18 @@ async function transcribeAndPersist(args: {
     text: u.transcript ?? "",
     timestamp: Math.round((u.start ?? 0) * 1000),
   }));
+  const persistPayload = {
+    ...(transcript.length > 0 ? { transcript } : {}),
+    upload_status: "done" as const,
+    status: "completed" as const,
+  };
 
   // `.select("id")` makes a 0-row update observable. Without it, if the
   // interview was deleted (or never existed under this id), `.update()`
   // returns `error: null` and we'd report success while writing nothing.
   const { error: persistErr, data: persistedRows } = await serviceSupabase
     .from("interviews")
-    .update({
-      transcript,
-      upload_status: "done",
-      status: "completed",
-    })
+    .update(persistPayload)
     .eq("id", interviewId)
     .select("id");
 

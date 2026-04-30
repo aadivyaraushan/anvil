@@ -154,11 +154,9 @@ test.describe("Upload queue (interview audio)", () => {
     );
 
     await page.goto(`/project/${projectId}`);
-    // Trigger queueUpload from the page context. There's no UI button
-    // wired up to it yet (capsule does its own upload), so we drive the
-    // hook indirectly via the supabase admin probe — confirming the
-    // client-side state machine works in isolation by simulating the
-    // first half (the row update) directly.
+    // Trigger the upload state machine from the page context. We drive the
+    // first half indirectly via the Supabase probe so this stays focused on
+    // RLS + row update behavior, not browser microphone availability.
     const result = await page.evaluate(async (id) => {
       const url = (window as unknown as { NEXT_PUBLIC_SUPABASE_URL?: string })
         .NEXT_PUBLIC_SUPABASE_URL;

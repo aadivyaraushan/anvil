@@ -8,10 +8,10 @@ import { SourceGlyph } from './source-glyph'
 import { SuggestedFollowupCard } from './suggested-followup-card'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
+import { useTauri } from '@/lib/hooks/use-tauri'
 
 type InterviewCanvasProps = {
   interview: Interview | null
-  projectId?: string
 }
 
 function formatDuration(seconds: number | null): string {
@@ -43,6 +43,12 @@ function isUrl(value: string | null): boolean {
   return /^https?:\/\//i.test(value.trim())
 }
 
+function errorMessage(error: unknown): string | null {
+  if (error instanceof Error) return error.message
+  if (typeof error === 'string') return error
+  return null
+}
+
 function WaveformBars({ phase }: { phase: number }) {
   return (
     <div className="flex items-center gap-px h-4">
@@ -72,7 +78,8 @@ function pickMimeType(): string {
   return candidates.find((t) => MediaRecorder.isTypeSupported(t)) ?? ''
 }
 
-export function InterviewCanvas({ interview, projectId: _projectId }: InterviewCanvasProps) {
+export function InterviewCanvas({ interview }: InterviewCanvasProps) {
+  const { isTauri, invoke, readFileBytes } = useTauri()
   const [followupIndex, setFollowupIndex] = useState(0)
   const [recordingError, setRecordingError] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
@@ -87,6 +94,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   // chunk — sending individual chunks to Deepgram's batch API produces
   // undecodable fragments for all chunks after the first.
   const chunksRef = useRef<Blob[]>([])
+  const nativeRecordingIdRef = useRef<string | null>(null)
   // Capture which interview this recording is for in case the user
   // navigates to another conversation before stopping.
   const recordingInterviewRef = useRef<Interview | null>(null)
@@ -138,6 +146,30 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
     recordingInterviewRef.current = interview
     chunksRef.current = []
 
+    if (isTauri) {
+      try {
+        const recordingId = await invoke<string>('start_recording', {
+          projectId: interview.project_id,
+          attendeeName: interview.attendee_name ?? null,
+        })
+        if (!recordingId) {
+          setRecordingError('Could not start recording. Please try again.')
+          recordingInterviewRef.current = null
+          return
+        }
+        nativeRecordingIdRef.current = recordingId
+        setIsRecording(true)
+      } catch (e) {
+        recordingInterviewRef.current = null
+        const detail = errorMessage(e)
+        setRecordingError(
+          detail ? `Could not start recording - ${detail}.` : 'Could not start recording. Please try again.',
+        )
+        console.error('[canvas] native recording start failed:', e)
+      }
+      return
+    }
+
     let stream: MediaStream
     try {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true })
@@ -170,6 +202,61 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
   }
 
   const handleStopRecording = async () => {
+    const nativeRecordingId = nativeRecordingIdRef.current
+    if (nativeRecordingId) {
+      setUploading(true)
+      try {
+        const filePath = await invoke<string>('stop_recording', {
+          recordingId: nativeRecordingId,
+        })
+        nativeRecordingIdRef.current = null
+        setIsRecording(false)
+
+        if (!filePath) {
+          setRecordingError('Could not finalize recording.')
+          return
+        }
+
+        let bytes: Uint8Array | null
+        try {
+          bytes = await readFileBytes(filePath)
+        } catch (e) {
+          console.error('[canvas] native recording file read failed:', e)
+          setRecordingError('Could not read recording file.')
+          return
+        }
+        if (!bytes) {
+          setRecordingError('Could not read recording file.')
+          return
+        }
+
+        const capturedInterview = recordingInterviewRef.current ?? interview
+        recordingInterviewRef.current = null
+        const fileName = filePath.split(/[\\/]/).pop() ?? 'recording.wav'
+        const blob = new Blob([bytes.slice().buffer as ArrayBuffer], {
+          type: 'audio/wav',
+        })
+
+        await uploadRecordingBlob({
+          blob,
+          fileName,
+          capturedInterview,
+        })
+      } catch (e) {
+        nativeRecordingIdRef.current = null
+        setIsRecording(false)
+        recordingInterviewRef.current = null
+        const detail = errorMessage(e)
+        setRecordingError(
+          detail ? `Upload failed — ${detail}. Please try again.` : 'Upload failed. Please try again.',
+        )
+        console.error('[canvas] native recording failed:', e)
+      } finally {
+        setUploading(false)
+      }
+      return
+    }
+
     const recorder = mediaRecorderRef.current
     if (!recorder || recorder.state === 'inactive') return
     setUploading(true)
@@ -197,61 +284,77 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
     }
 
     try {
-      const { getSupabase } = await import('@/lib/supabase/client')
-      const { data: { session } } = await getSupabase().auth.getSession()
-      const token = session?.access_token
-      if (!token) {
-        setRecordingError('Not signed in. Please sign in again.')
-        setUploading(false)
-        return
-      }
-
-      const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
       const mimeType = chunks[0]?.type || 'audio/webm'
       const ext = mimeType.includes('ogg') ? 'ogg' : mimeType.includes('mp4') ? 'mp4' : 'webm'
       const blob = new Blob(chunks, { type: mimeType })
 
-      const fd = new FormData()
-      fd.append('file', blob, `recording.${ext}`)
-      fd.append('project_id', capturedInterview.project_id ?? '')
-      fd.append('source', 'desktop')
-      if (capturedInterview.attendee_name) {
-        fd.append('attendee_name', capturedInterview.attendee_name)
-      }
-      fd.append('interview_id', capturedInterview.id)
-
-      const res = await fetch(`${apiBase}/api/interviews/upload`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
-        body: fd,
+      await uploadRecordingBlob({
+        blob,
+        fileName: `recording.${ext}`,
+        capturedInterview,
       })
-      if (!res.ok) {
-        // Surface the route's structured error (stage/detail/code) instead
-        // of swallowing it behind a generic "Upload failed (500)". The
-        // upload route returns JSON like { error, stage, detail, code }.
-        let detail = `${res.status}`
-        try {
-          const body = (await res.json()) as {
-            error?: string
-            stage?: string
-            detail?: string
-            code?: string
-          }
-          if (body?.detail) detail = `${body.stage ?? res.status}: ${body.detail}`
-          else if (body?.error) detail = body.error
-        } catch {
-          // body wasn't JSON — keep the status code
-        }
-        setRecordingError(`Upload failed — ${detail}. Please try again.`)
-        console.error('[canvas] upload failed:', detail)
-      }
     } catch (e) {
+      const detail = errorMessage(e)
       setRecordingError(
-        e instanceof Error ? `Upload failed — ${e.message}. Please try again.` : 'Upload failed. Please try again.',
+        detail ? `Upload failed — ${detail}. Please try again.` : 'Upload failed. Please try again.',
       )
       console.error('[canvas] upload failed:', e)
     } finally {
       setUploading(false)
+    }
+  }
+
+  const uploadRecordingBlob = async ({
+    blob,
+    fileName,
+    capturedInterview,
+  }: {
+    blob: Blob
+    fileName: string
+    capturedInterview: Interview
+  }) => {
+    const { getSupabase } = await import('@/lib/supabase/client')
+    const { data: { session } } = await getSupabase().auth.getSession()
+    const token = session?.access_token
+    if (!token) {
+      setRecordingError('Not signed in. Please sign in again.')
+      return
+    }
+
+    const apiBase = process.env.NEXT_PUBLIC_API_URL ?? ''
+    const fd = new FormData()
+    fd.append('file', blob, fileName)
+    fd.append('project_id', capturedInterview.project_id ?? '')
+    fd.append('source', 'desktop')
+    if (capturedInterview.attendee_name) {
+      fd.append('attendee_name', capturedInterview.attendee_name)
+    }
+    fd.append('interview_id', capturedInterview.id)
+
+    const res = await fetch(`${apiBase}/api/interviews/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd,
+    })
+    if (!res.ok) {
+      // Surface the route's structured error (stage/detail/code) instead
+      // of swallowing it behind a generic "Upload failed (500)". The
+      // upload route returns JSON like { error, stage, detail, code }.
+      let detail = `${res.status}`
+      try {
+        const body = (await res.json()) as {
+          error?: string
+          stage?: string
+          detail?: string
+          code?: string
+        }
+        if (body?.detail) detail = `${body.stage ?? res.status}: ${body.detail}`
+        else if (body?.error) detail = body.error
+      } catch {
+        // body wasn't JSON — keep the status code
+      }
+      setRecordingError(`Upload failed — ${detail}. Please try again.`)
+      console.error('[canvas] upload failed:', detail)
     }
   }
 
@@ -329,6 +432,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
             <Button
               variant="outline"
               size="sm"
+              data-testid="stop-recording-button"
               onClick={handleStopRecording}
               disabled={uploading}
               className="text-[12px] h-7 inline-flex items-center gap-1.5"
@@ -340,6 +444,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
         ) : isScheduled ? (
           <Button
             size="sm"
+            data-testid="start-recording-button"
             onClick={handleStartRecording}
             className="text-[12px] h-7 inline-flex items-center gap-1.5"
           >
@@ -404,6 +509,7 @@ export function InterviewCanvas({ interview, projectId: _projectId }: InterviewC
                   </p>
                   <Button
                     size="sm"
+                    data-testid="start-recording-empty-button"
                     onClick={handleStartRecording}
                     className="text-[12px] h-7 inline-flex items-center gap-1.5"
                   >

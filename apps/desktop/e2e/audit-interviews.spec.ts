@@ -14,13 +14,15 @@ import {
  *       assert `interviews` row lands with status='scheduled', source='inperson'.
  *   C2  Schedule online interview with a meeting link — assert
  *       meeting_link saved and source='meet-link' (or whichever the form sets).
+ *   C3  Recording is only offered from a selected conversation page; the
+ *       old dashboard/capsule quick-capture entry point stays gone.
  *   C5  Free-tier limit: third interview MUST be blocked once enforcement
  *       lands. Today the limit isn't enforced anywhere — locking in current
  *       behavior so the test fails when enforcement is added.
  *
- * Note: edit + delete (C3 + C4) have no UI surface today (`useUpdateInterview`
- * / `useDeleteInterview` exist as hooks but no component calls them).
- * Documented in AUDIT-2026-04-27.md; not test-covered until UI ships.
+ * Note: edit has no UI surface today (`useUpdateInterview` exists as a hook
+ * but no component calls it). Documented in AUDIT-2026-04-27.md; not
+ * test-covered until UI ships.
  */
 
 let testUserId: string;
@@ -131,18 +133,53 @@ test.describe("audit: interviews (free plan)", () => {
     expect(interviews).toHaveLength(1);
     const interviewId = interviews[0].id;
 
-    // Hover to reveal the kebab, then open the dropdown. Auto-accept the
-    // browser confirm() since our delete handler uses window.confirm.
-    page.once("dialog", (d) => d.accept());
+    // Hover to reveal the kebab, then open the dropdown. Delete now opens
+    // an in-app Dialog (not window.confirm) so it works under Tauri's
+    // WKWebView where blocking confirm() is suppressed.
     await page.getByTestId("interview-row-kebab").click();
     await page.getByTestId("interview-row-delete").click();
-
-    // Row disappears from the inbox; DB row gone.
-    await expect(page.getByText("Audit C4 to delete")).toBeHidden({
-      timeout: 10_000,
+    await expect(page.getByTestId("interview-row-delete-dialog")).toBeVisible({
+      timeout: 5_000,
     });
+    await page.getByTestId("interview-row-delete-confirm").click();
+
+    // Row disappears from the inbox; DB row gone. Use exact match so we
+    // don't collide with the dialog description (which echoes the attendee
+    // name) during its fade-out animation.
+    await expect(
+      page.getByText("Audit C4 to delete", { exact: true }),
+    ).toBeHidden({ timeout: 10_000 });
     interviews = await getInterviewsForProject(projectId);
     expect(interviews.find((i) => i.id === interviewId)).toBeUndefined();
+  });
+
+  test("C3 recording starts from conversation page only — no dashboard quick-capture modal", async ({
+    page,
+  }) => {
+    await page.goto(`/project/${projectId}`);
+    await page.getByRole("button", { name: /add conversation/i }).click();
+    await page
+      .locator("input[placeholder*='Attendee name']")
+      .fill("Audit C3 recorder");
+    await page
+      .getByRole("button", { name: /^schedule conversation$/i })
+      .click();
+    await expect(page.getByText("Audit C3 recorder").first()).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByText("Audit C3 recorder").first().click();
+    await expect(page.getByTestId("start-recording-button")).toBeVisible({
+      timeout: 10_000,
+    });
+
+    await page.goto("/dashboard");
+    await expect(
+      page.getByRole("button", { name: /^start recording$/i }),
+    ).toHaveCount(0);
+
+    const capsuleResponse = await page.goto("/capsule");
+    expect(capsuleResponse?.status()).toBe(404);
   });
 
   test("C5 free-tier interview limit is enforced — 3rd attempt shows plan-limit banner", async ({

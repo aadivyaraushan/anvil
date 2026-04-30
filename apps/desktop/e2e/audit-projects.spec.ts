@@ -13,14 +13,15 @@ import {
  *
  *   B1  Create project from /dashboard/new — assert `projects` row lands.
  *   B2  Edit project at /project/[id]/settings — assert updated fields persist.
- *   B3  Delete project — no UI surface, so we just verify the cleanup helper
- *       works (negative coverage that documents the missing UI).
+ *   B3  Delete project from /project/[id]/settings danger zone.
  *   B4  Free-tier project limit — currently NOT enforced. The plan config
  *       at apps/desktop/src/lib/billing/plans.ts says `projects: 1` for
  *       free, but `withinLimit()` is never called outside unit tests.
  *       This spec asserts the *current* behavior (creation succeeds past
  *       the cap) so the test fails the day enforcement is added — that's
  *       the signal to flip the assertion.
+ *   B5  Delete project from the dashboard kebab menu — type-to-confirm
+ *       dialog, row disappears, DB row gone.
  */
 
 let testUserId: string;
@@ -167,5 +168,43 @@ test.describe("audit: projects (free plan)", () => {
     expect(body.code).toBe("PLAN_LIMIT");
     expect(body.stage).toBe("project_create");
     expect(body.plan).toBe("free");
+  });
+
+  test("B5 delete project from dashboard kebab — type-to-confirm dialog removes the row", async ({
+    page,
+  }) => {
+    // Seed via UI so the project shows up in the dashboard list with the
+    // same shape it would have in prod.
+    await page.goto("/dashboard/new");
+    await page.locator("#name").fill("Audit B5 to delete");
+    await page.locator("#idea_description").fill("Delete me from dashboard");
+    await page.getByRole("button", { name: /create project/i }).click();
+    await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 15_000 });
+    const projectId = page.url().match(/\/project\/([0-9a-f-]{36})$/)![1];
+
+    await page.goto("/dashboard");
+    const row = page.getByTestId(`project-row-${projectId}`);
+    await expect(row).toBeVisible({ timeout: 10_000 });
+
+    // Reveal kebab on hover, then open the menu and click Delete project.
+    await row.hover();
+    await page.getByTestId(`project-row-kebab-${projectId}`).click();
+    await page.getByTestId(`project-row-delete-${projectId}`).click();
+
+    // Type-to-confirm dialog. Submit stays disabled until the input
+    // matches the project name exactly.
+    const dialog = page.getByTestId(`project-row-delete-dialog-${projectId}`);
+    await expect(dialog).toBeVisible({ timeout: 5_000 });
+    const submit = page.getByTestId(`project-row-delete-confirm-${projectId}`);
+    await expect(submit).toBeDisabled();
+    await page
+      .getByTestId(`project-row-delete-input-${projectId}`)
+      .fill("Audit B5 to delete");
+    await expect(submit).toBeEnabled();
+    await submit.click();
+
+    await expect(row).toBeHidden({ timeout: 10_000 });
+    const rows = await getProjectsForUser(testUserId);
+    expect(rows.find((r) => r.id === projectId)).toBeUndefined();
   });
 });

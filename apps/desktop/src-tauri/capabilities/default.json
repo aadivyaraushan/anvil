@@ -2,15 +2,17 @@
   "identifier": "default",
   "description": "Default capability set for Anvil desktop",
   "platforms": ["macOS"],
-  "windows": ["main", "capsule"],
+  "windows": ["main"],
   "remote": {
-    "urls": ["https://app.anvil-dev.com/*"]
+    "urls": [
+      "https://app.anvil-dev.com/*",
+      "http://localhost:*",
+      "http://127.0.0.1:*"
+    ]
   },
   "permissions": [
     "core:default",
     "deep-link:default",
-    "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister",
     "log:default",
     "store:default",
     "fs:default",

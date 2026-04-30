@@ -29,6 +29,7 @@ export function useProjects() {
       if (error) throw error;
       return data as Project[];
     },
+    refetchOnMount: "always",
   });
 }
 
@@ -46,6 +47,7 @@ export function useProject(id: string) {
       return data as Project;
     },
     enabled: Boolean(id),
+    refetchOnMount: "always",
   });
 }
 
@@ -177,10 +179,23 @@ export function useDeleteProject() {
       }
       return id;
     },
+    onMutate: async (id) => {
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: projectKeys.detail(id) }),
+        queryClient.cancelQueries({ queryKey: projectKeys.personas(id) }),
+        queryClient.cancelQueries({ queryKey: projectKeys.analystDoc(id) }),
+        queryClient.cancelQueries({ queryKey: ["interviews", id] }),
+      ]);
+    },
     onSuccess: (id) => {
       queryClient.setQueryData<Project[]>(projectKeys.all, (old) =>
         old ? old.filter((p) => p.id !== id) : []
       );
+      queryClient.removeQueries({ queryKey: projectKeys.detail(id) });
+      queryClient.removeQueries({ queryKey: projectKeys.personas(id) });
+      queryClient.removeQueries({ queryKey: projectKeys.analystDoc(id) });
+      queryClient.invalidateQueries({ queryKey: ["interviews"] });
+      queryClient.invalidateQueries({ queryKey: ["analyst_documents", "all"] });
     },
   });
 }
@@ -220,6 +235,7 @@ export function useUpsertPersonas() {
         description: string;
         job_titles: string[];
         pain_points: string[];
+        status?: "suggested" | "confirmed";
       }>;
     }) => {
       const supabase = getSupabase();

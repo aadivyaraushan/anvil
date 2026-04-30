@@ -5,7 +5,7 @@ export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string; interviewId: string }> }
 ) {
-  const { interviewId } = await ctx.params;
+  const { id, interviewId } = await ctx.params;
   const token = extractBearerToken(req.headers.get("authorization"));
   if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -17,6 +17,7 @@ export async function GET(
     .from("interviews")
     .select("*")
     .eq("id", interviewId)
+    .eq("project_id", id)
     .single();
 
   if (error) {
@@ -30,7 +31,7 @@ export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string; interviewId: string }> }
 ) {
-  const { interviewId } = await ctx.params;
+  const { id, interviewId } = await ctx.params;
   const token = extractBearerToken(req.headers.get("authorization"));
   if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -56,6 +57,7 @@ export async function PATCH(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .update(allowed as any)
     .eq("id", interviewId)
+    .eq("project_id", id)
     .select()
     .single();
 
@@ -67,7 +69,7 @@ export async function DELETE(
   req: NextRequest,
   ctx: { params: Promise<{ id: string; interviewId: string }> },
 ) {
-  const { interviewId } = await ctx.params;
+  const { id, interviewId } = await ctx.params;
   const token = extractBearerToken(req.headers.get("authorization"));
   if (!token) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -82,6 +84,7 @@ export async function DELETE(
     .from("interviews")
     .delete()
     .eq("id", interviewId)
+    .eq("project_id", id)
     .select("id");
 
   if (error) return Response.json({ error: error.message }, { status: 500 });

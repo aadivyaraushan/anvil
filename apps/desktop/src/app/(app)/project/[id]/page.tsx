@@ -25,7 +25,7 @@ function ProjectWorkspace({ id }: { id: string }) {
         activeInterviewId={activeInterviewId}
         onSelect={setActiveInterviewId}
       />
-      <InterviewCanvas interview={activeInterview} projectId={id} />
+      <InterviewCanvas interview={activeInterview} />
       <FindingsRail projectId={id} />
     </div>
   )

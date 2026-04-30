@@ -65,9 +65,9 @@ export function useInterviews(projectId: string) {
     // long after the transcript has actually landed.
     refetchOnMount: "always",
     // Poll while any conversation is mid-upload or live. Without this,
-    // a user staring at the canvas after hitting Stop in the capsule
-    // wouldn't see the transcript appear until they navigated away and
-    // back. Stops polling once everything is in a terminal state.
+    // a user staring at the canvas after stopping a recording wouldn't
+    // see the transcript appear until they navigated away and back.
+    // Stops polling once everything is in a terminal state.
     refetchInterval: (query) => {
       const data = query.state.data as
         | { interviews: Interview[] }
@@ -166,7 +166,15 @@ export function useCreateInterview() {
 
       return (await res.json()) as Interview;
     },
-    onSuccess: (_data, params) => {
+    onSuccess: (created, params) => {
+      queryClient.setQueryData<{ interviews: Interview[]; grouped: GroupedInterviews }>(
+        interviewKeys.list(params.projectId),
+        (old) => {
+          if (!old) return { interviews: [created], grouped: groupInterviews([created]) };
+          const interviews = [created, ...old.interviews.filter((i) => i.id !== created.id)];
+          return { interviews, grouped: groupInterviews(interviews) };
+        }
+      );
       queryClient.invalidateQueries({ queryKey: interviewKeys.list(params.projectId) });
     },
   });
@@ -225,7 +233,9 @@ export function useDeleteInterview() {
       }
       return id;
     },
-    onSuccess: (id, { projectId }) => {
+    onSuccess: (id, variables) => {
+      const { projectId } = variables;
+      queryClient.removeQueries({ queryKey: interviewKeys.detail(id) });
       queryClient.setQueryData<{ interviews: Interview[]; grouped: GroupedInterviews }>(
         interviewKeys.list(projectId),
         (old) => {
@@ -247,7 +257,6 @@ export function useQueueUpload(interviewId: string) {
 
   return useMutation({
     mutationFn: async ({
-      projectId,
       audioBlob,
     }: {
       projectId: string;

@@ -22,6 +22,8 @@ out/
 
 # production
 /build
+apps/desktop/src-tauri/target/
+apps/desktop/src-tauri/capabilities/e2e.json
 
 # misc
 .DS_Store

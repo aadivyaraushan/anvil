@@ -39,6 +39,11 @@ vi.mock('lucide-react', () => ({
   ChevronLeft: () => <span data-testid="icon-chevron-left" />,
   MapPin: () => <span data-testid="icon-map-pin" />,
   Video: () => <span data-testid="icon-video" />,
+  // Dialog (used by the new conversation-delete confirm) renders an XIcon
+  // close button. Stub it so the menu/dialog tree mounts in tests.
+  XIcon: () => <span data-testid="icon-x" />,
+  CheckIcon: () => <span data-testid="icon-check" />,
+  ChevronRightIcon: () => <span data-testid="icon-chevron-right" />,
 }))
 
 const makeInterview = (overrides: Partial<Interview> = {}): Interview => ({

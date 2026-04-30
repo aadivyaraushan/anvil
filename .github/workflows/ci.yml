@@ -79,7 +79,9 @@ jobs:
 
       - name: Run Rust tests
         working-directory: apps/desktop/src-tauri
-        run: cargo test
+        run: |
+          cargo test
+          cargo check --features e2e
 
   # ── Integration tests ───────────────────────────────────────────────────────
   integration:
