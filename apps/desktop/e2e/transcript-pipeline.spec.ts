@@ -57,7 +57,8 @@ test.describe("Transcript pipeline — render states", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Empty Sara").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Empty Sara").click({ timeout: 15_000 });
     await expect(page.getByText(/no transcript available/i)).toBeVisible({
       timeout: 10_000,
     });
@@ -85,7 +86,8 @@ test.describe("Transcript pipeline — render states", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Diarized Dax").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Diarized Dax").click({ timeout: 15_000 });
 
     await expect(
       page.getByText("Hi there, thanks for joining."),
@@ -109,7 +111,8 @@ test.describe("Transcript pipeline — render states", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Live Lou").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Live Lou").click({ timeout: 15_000 });
     // For status='live' the canvas shows the "Listening…" empty state.
     await expect(
       page.getByText(/Listening/i),
@@ -133,7 +136,8 @@ test.describe("Transcript pipeline — render states", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Auto Refresh Ali").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Auto Refresh Ali").click({ timeout: 15_000 });
 
     await expect(page.getByText(/Transcribing/i)).toBeVisible({ timeout: 10_000 });
 
@@ -229,7 +233,8 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
     });
 
     await page.goto(`/project/${projectId}`);
-    await page.getByText("Empty Edith").click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText("Empty Edith").click({ timeout: 15_000 });
     await expect(page.getByText(/no transcript available/i)).toBeVisible({
       timeout: 10_000,
     });
@@ -262,6 +267,7 @@ test.describe("Transcript pipeline — large content perf", () => {
     });
 
     await page.goto(`/project/${projectId}`);
+    await page.waitForLoadState("networkidle");
     await page.getByText("Marathon Mira").click({ timeout: 30_000 });
     const renderStart = Date.now();
     await expect(page.getByText("Line 0:", { exact: false })).toBeVisible({
