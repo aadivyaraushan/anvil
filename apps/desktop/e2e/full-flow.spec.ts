@@ -269,7 +269,13 @@ test.describe("End-to-end user flow", () => {
     await expect(
       page.getByRole("button", { name: /log out/i }),
     ).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: /log out/i }).click({ force: true });
+    // The Next.js dev overlay can appear from auth errors during the
+    // sign-out/sign-in cycle and intercept pointer events. Dismiss it
+    // before clicking.
+    await page.evaluate(() => {
+      document.querySelectorAll("nextjs-portal").forEach((el) => el.remove());
+    });
+    await page.getByRole("button", { name: /log out/i }).click();
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
   });

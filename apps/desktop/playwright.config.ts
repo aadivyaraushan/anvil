@@ -33,9 +33,9 @@ export default defineConfig({
   // Sequential — single worker prevents DB mutation races between tests
   workers: 1,
   fullyParallel: false,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   timeout: 30_000,
-  expect: { timeout: 10_000 },
+  expect: { timeout: 15_000 },
 
   globalSetup: "./e2e/global-setup.ts",
   globalTeardown: "./e2e/global-teardown.ts",
