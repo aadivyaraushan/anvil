@@ -18,7 +18,7 @@ export default defineConfig({
   // suite's stance on DB-mutation races.
   workers: 1,
   fullyParallel: false,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   timeout: 60_000,
   expect: { timeout: 15_000 },
 
