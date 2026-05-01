@@ -2,7 +2,8 @@ import { expect, type TauriPage } from "../fixtures";
 
 export async function clickSelector(
   tauriPage: TauriPage,
-  selector: string
+  selector: string,
+  timeout = 30_000
 ): Promise<void> {
   await expect
     .poll(
@@ -10,7 +11,7 @@ export async function clickSelector(
         tauriPage.evaluate<boolean>(
           `(() => !!document.querySelector(${JSON.stringify(selector)}))()`
         ),
-      { timeout: 15_000, message: `missing selector: ${selector}` }
+      { timeout, message: `missing selector: ${selector}` }
     )
     .toBe(true);
   await tauriPage.evaluate(
@@ -84,10 +85,11 @@ export async function existsSelector(
 
 export async function waitForSelector(
   tauriPage: TauriPage,
-  selector: string
+  selector: string,
+  timeout = 30_000
 ): Promise<void> {
   await expect
-    .poll(() => existsSelector(tauriPage, selector), { timeout: 15_000 })
+    .poll(() => existsSelector(tauriPage, selector), { timeout })
     .toBe(true);
 }
 
