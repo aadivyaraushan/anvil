@@ -110,6 +110,9 @@ test.describe("@built analysis, transcripts, and personas", () => {
 
     for (let i = 0; i < 2; i += 1) {
       await tauriPage.goto(`${devUrl}/project/${projectId}`);
+      await expect
+        .poll(() => visibleText(tauriPage), { timeout: 30_000 })
+        .toContain("Morgan Transcript");
       await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
       await expect.poll(() => visibleText(tauriPage)).toContain(
         "We spend three days every month closing the books."
@@ -133,6 +136,9 @@ test.describe("@built analysis, transcripts, and personas", () => {
     });
 
     await tauriPage.goto(`${devUrl}/project/${projectId}`);
+    await expect
+      .poll(() => visibleText(tauriPage), { timeout: 30_000 })
+      .toContain("Live Transcript Person");
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await clickSelector(tauriPage, '[data-testid="start-recording-button"]');
     await waitForSelector(tauriPage, '[data-testid="stop-recording-button"]');
@@ -154,6 +160,9 @@ test.describe("@built analysis, transcripts, and personas", () => {
     expect(row?.transcript).toEqual(transcriptOne);
 
     await tauriPage.goto(`${devUrl}/project/${projectId}`);
+    await expect
+      .poll(() => visibleText(tauriPage), { timeout: 30_000 })
+      .toContain("Live Transcript Person");
     await clickSelector(tauriPage, `[data-testid="interview-row-${interviewId}"]`);
     await expect.poll(() => visibleText(tauriPage)).toContain(
       "We spend three days every month closing the books."
