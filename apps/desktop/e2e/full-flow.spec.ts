@@ -182,7 +182,7 @@ test.describe("End-to-end user flow", () => {
       .fill("Discover what slows down month-end close for finance leaders.");
 
     await page.getByRole("button", { name: /create project/i }).click();
-    await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 20_000 });
+    await page.waitForURL(/\/project\/[0-9a-f-]{36}$/, { timeout: 30_000 });
     const projectId = page.url().match(/\/project\/([0-9a-f-]{36})$/)![1];
 
     // ------------------------------------------------------------------

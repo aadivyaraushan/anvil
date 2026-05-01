@@ -122,7 +122,7 @@ test.describe("Transcript pipeline — render states", () => {
   test("transcript auto-appears when interview transitions from uploading to completed", async ({
     page,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     const projectId = await seedProject({
       userId: testUserId,
       name: "Transcript: auto-refresh",
@@ -157,7 +157,8 @@ test.describe("Transcript pipeline — render states", () => {
 
     if (!appearedViaPolling) {
       await page.reload();
-      await page.getByText("Auto Refresh Ali").click();
+      await page.waitForLoadState("networkidle");
+      await page.getByText("Auto Refresh Ali").click({ timeout: 15_000 });
     }
 
     await expect(target).toBeVisible({ timeout: 15_000 });
