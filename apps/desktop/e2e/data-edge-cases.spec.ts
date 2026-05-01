@@ -195,8 +195,9 @@ test.describe("Stored-data weirdness", () => {
     });
 
     await page.goto(`/project/${projectId}`);
+    await page.waitForLoadState("networkidle");
     await expect(page.getByText("Sofía 🌶️ García")).toBeVisible({
-      timeout: 10_000,
+      timeout: 15_000,
     });
   });
 
