@@ -58,6 +58,9 @@ test.describe("Transcript pipeline — render states", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Empty Sara").click({ timeout: 15_000 });
     await expect(page.getByText(/no transcript available/i)).toBeVisible({
       timeout: 10_000,
@@ -87,6 +90,9 @@ test.describe("Transcript pipeline — render states", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Diarized Dax").click({ timeout: 15_000 });
 
     await expect(
@@ -112,6 +118,9 @@ test.describe("Transcript pipeline — render states", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Live Lou").click({ timeout: 15_000 });
     // For status='live' the canvas shows the "Listening…" empty state.
     await expect(
@@ -137,6 +146,9 @@ test.describe("Transcript pipeline — render states", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Auto Refresh Ali").click({ timeout: 15_000 });
 
     await expect(page.getByText(/Transcribing/i)).toBeVisible({ timeout: 10_000 });
@@ -190,6 +202,9 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Uploading Uma").click({ timeout: 15_000 });
     await expect(page.getByText(/Transcribing/i)).toBeVisible({
       timeout: 10_000,
@@ -213,6 +228,9 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Failed Felix").click({ timeout: 15_000 });
     await expect(page.getByText(/transcription failed/i)).toBeVisible({
       timeout: 10_000,
@@ -235,6 +253,9 @@ test.describe("Transcript pipeline — upload-status state machine", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Empty Edith").click({ timeout: 15_000 });
     await expect(page.getByText(/no transcript available/i)).toBeVisible({
       timeout: 10_000,
@@ -269,6 +290,9 @@ test.describe("Transcript pipeline — large content perf", () => {
 
     await page.goto(`/project/${projectId}`);
     await page.waitForLoadState("networkidle");
+    await expect(
+      page.getByRole("button", { name: /add conversation/i }),
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByText("Marathon Mira").click({ timeout: 30_000 });
     const renderStart = Date.now();
     await expect(page.getByText("Line 0:", { exact: false })).toBeVisible({

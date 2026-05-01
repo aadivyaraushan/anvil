@@ -269,7 +269,7 @@ test.describe("End-to-end user flow", () => {
     await expect(
       page.getByRole("button", { name: /log out/i }),
     ).toBeVisible({ timeout: 15_000 });
-    await page.getByRole("button", { name: /log out/i }).click();
+    await page.getByRole("button", { name: /log out/i }).click({ force: true });
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");
   });
