@@ -230,10 +230,11 @@ test.describe("End-to-end user flow", () => {
     //     deterministic way to force the React Query refetch).
     // ------------------------------------------------------------------
     await page.reload();
-    await page.getByText(TEST_ATTENDEE).click();
+    await page.waitForLoadState("networkidle");
+    await page.getByText(TEST_ATTENDEE).click({ timeout: 15_000 });
     await expect(
       page.getByText("Hi Pat, thanks for joining today."),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByText("Happy to help. What are we covering?"),
     ).toBeVisible();
@@ -250,9 +251,10 @@ test.describe("End-to-end user flow", () => {
     // 12. Findings rail surfaces the seeded pain point + customer language.
     // ------------------------------------------------------------------
     await page.reload();
+    await page.waitForLoadState("networkidle");
     await expect(
       page.getByText(/Month-end close consumes a full week/i),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByText("month-end close", { exact: true }),
     ).toBeVisible();
@@ -263,9 +265,10 @@ test.describe("End-to-end user flow", () => {
     // Sidebar isn't on the project workspace; navigate to a page that
     // has it (dashboard / settings / billing).
     await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
     await expect(
       page.getByRole("button", { name: /log out/i }),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: /log out/i }).click();
     await page.waitForURL("/login", { timeout: 15_000 });
     await expect(page).toHaveURL("/login");

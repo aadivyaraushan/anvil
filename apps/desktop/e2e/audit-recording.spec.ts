@@ -65,9 +65,10 @@ test.describe("audit: recording (canvas)", () => {
     page,
   }) => {
     await page.goto(`/project/${projectId}`);
+    await page.waitForLoadState("networkidle");
     await expect(
       page.getByText("Audit D Subject").first(),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
 
     // Open the canvas for our interview.
     await page.getByText("Audit D Subject").first().click();

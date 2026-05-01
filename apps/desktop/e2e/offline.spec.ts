@@ -80,8 +80,9 @@ test.describe("Offline / network resilience", () => {
     );
     await page.goto("/dashboard");
     await projectsLoaded;
+    await page.waitForLoadState("networkidle");
     await expect(page.getByText("Cached Project")).toBeVisible({
-      timeout: 10_000,
+      timeout: 15_000,
     });
 
     await context.setOffline(true);

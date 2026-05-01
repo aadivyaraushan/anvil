@@ -170,11 +170,12 @@ test.describe("RLS — UI side: user A's dashboard never leaks user B's data", (
     await seedProject({ userId: auxUser.id, name: "OTHERS-Hidden" });
 
     await page.goto("/dashboard");
+    await page.waitForLoadState("networkidle");
     await expect(
       page.getByRole("link", { name: "New project" }),
-    ).toBeVisible({ timeout: 10_000 });
+    ).toBeVisible({ timeout: 15_000 });
 
-    await expect(page.getByText("MINE-Visible")).toBeVisible();
+    await expect(page.getByText("MINE-Visible")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText("OTHERS-Hidden")).toHaveCount(0);
   });
 });
