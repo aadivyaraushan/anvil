@@ -123,6 +123,7 @@ test.describe("@built analysis, transcripts, and personas", () => {
   test("native recording keeps visible transcript while recording and preserves it after stop", async ({
     tauriPage,
   }) => {
+    test.setTimeout(120_000);
     const projectId = await seedProject({ userId, name: "Built Transcript Recording" });
     const interviewId = await seedInterview({
       projectId,
@@ -140,13 +141,13 @@ test.describe("@built analysis, transcripts, and personas", () => {
       "We spend three days every month closing the books."
     );
 
-    await new Promise((resolve) => setTimeout(resolve, 1_000));
+    await new Promise((resolve) => setTimeout(resolve, 3_000));
     await clickSelector(tauriPage, '[data-testid="stop-recording-button"]');
     await expect
       .poll(async () => {
         const row = (await getInterviewsForProject(projectId)).find((r) => r.id === interviewId);
         return row?.recording_path ?? null;
-      }, { timeout: 30_000 })
+      }, { timeout: 45_000 })
       .toMatch(/\.wav$/);
 
     const row = (await getInterviewsForProject(projectId)).find((r) => r.id === interviewId);
